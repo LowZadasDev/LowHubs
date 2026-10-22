@@ -17,8 +17,28 @@ local CATALOGO = {
         nome   = "Rivals",
         desc   = "Aimlock, triggerbot, box ESP",
         arquivo = "lowhub_rivals.lua",
-        place  = 117398147513099,
-        criador = 6035872082,
+        --[[
+            OS IDs DO RIVALS ESTAVAM ERRADOS (corrigido 22/10)
+
+            Antes:  place  = 117398147513099
+                    criador = 6035872082
+
+            6035872082 NAO e' CreatorId - e' o UNIVERSE ID. Como
+            game.CreatorId nunca devolve isso, a deteccao falhava
+            sempre e o auto-carregamento nunca achava o Rivals.
+
+            Conferido na API da Roblox:
+              UniverseId 6035872082
+                rootPlaceId = 17625359962    <- mapa principal
+                creator     = 3461453        <- grupo Nosniy Games
+
+            O Rivals tem mais de um lugar no mesmo universo, entao
+            eu aceito os dois PlaceIds conhecidos:
+              17625359962     (root)
+              117398147513099 (secundario - era o que a gente tinha)
+        --]]
+        places  = { 17625359962, 117398147513099 },
+        criador = 3461453,
         cor    = Color3.fromRGB(255, 90, 110),
     },
     {
@@ -218,10 +238,36 @@ local function rodar(item)
     end)
 end
 
+--[[
+    QUAL JOGO E' ESTE?
+
+    Cada entrada do catalogo pode declarar o jogo de duas formas:
+
+        place  = 123          (um PlaceId so)
+        places = { 123, 456 } (varios - jogo com mais de um lugar)
+
+    A segunda existe por causa do Rivals, que tem o mapa principal
+    e um secundario, ambos do mesmo universo.
+
+    Alem do PlaceId, aceito o CreatorId. Isso cobre mapa novo que
+    eu ainda nao conheco: se for do mesmo dono, e' o mesmo jogo.
+--]]
+local function bate_place(item)
+    if item.place and game.PlaceId == item.place then return true end
+    if item.places then
+        for _, id in ipairs(item.places) do
+            if game.PlaceId == id then return true end
+        end
+    end
+    return false
+end
+
 local function detectar_atual()
     for _, item in ipairs(CATALOGO) do
-        if item.place and game.PlaceId == item.place then return item end
-        if item.criador and game.CreatorId == item.criador then return item end
+        if bate_place(item) then return item end
+        if item.criador and game.CreatorId == item.criador then
+            return item
+        end
     end
     return nil
 end

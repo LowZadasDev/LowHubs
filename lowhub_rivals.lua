@@ -2,7 +2,7 @@ local VERSION = "LowHub Rivals"
 local limpar_tudo = nil
 
 --[[
-    TRAVA DE JOGO  (pedido do dono, 22/10)
+    TRAVA DE JOGO
 
     O hub so roda no jogo pra que foi feito. Se alguem pegar o
     arquivo e executar em outro lugar, ele nao faz NADA - so
@@ -12,27 +12,56 @@ local limpar_tudo = nil
     nada de loop. Se o jogo estiver errado, o script termina na
     primeira linha util.
 
-    Como o jogo e' identificado (do mais forte pro mais fraco):
+    ------------------------------------------------------------------
+    OS IDs ESTAVAM ERRADOS  (corrigido em 22/10)
 
-      1. game.PlaceId    - o ID exato do lugar. E' o unico que
-                           nao da pra contornar sem clonar o jogo.
-      2. game.CreatorId  - o dono. Pega qualquer lugar do mesmo
-                           criador (util quando o jogo tem varios
-                           mapas/servidores com PlaceId diferente).
+    O que estava guardado aqui:
 
-    Se os dois estiverem preenchidos, vale QUALQUER UM dos dois -
-    assim o hub continua funcionando se o Rivals abrir um mapa
-    novo com PlaceId diferente mas mesmo dono.
+        place   = 117398147513099   <- isso e' PlaceId, mas de um
+                                       mapa SECUNDARIO
+        criador = 6035872082        <- isso NAO e' CreatorId.
+                                       e' o UNIVERSE ID do Rivals.
+
+    Conferido na API da Roblox:
+
+        UniverseId 6035872082
+          rootPlaceId = 17625359962      <- o mapa principal
+          creator     = 3461453          <- Nosniy Games (grupo)
+          nome        = "[RIVALS]"
+
+    Ou seja: o campo `criador` guardava o Universe ID. Como
+    game.CreatorId nunca devolve isso, a comparacao dava falso
+    SEMPRE - a trava nunca ia reconhecer o Rivals.
+
+    ------------------------------------------------------------------
+    OS IDs CERTOS
+
+        game.PlaceId    = 17625359962   (root place do Rivals)
+        game.CreatorId  = 3461453       (grupo "Nosniy Games")
+
+    Aceito os DOIS PlaceIds conhecidos porque o Rivals tem mais de
+    um lugar no mesmo universo - os dois apontam pro mesmo jogo:
+
+        17625359962     -> universe 6035872082
+        117398147513099 -> universe 6035872082   (secundario)
+
+    Se o Rivals abrir um mapa novo com PlaceId diferente, o
+    CreatorId cobre - e' a rede de seguranca.
+
+    Se os dois campos estiverem preenchidos, vale QUALQUER UM.
 --]]
 local JOGO_ESPERADO = {
-    place   = 117398147513099,
-    criador = 6035872082,
+    -- root place + o place secundario que a gente ja conhecia
+    places  = { 17625359962, 117398147513099 },
+    criador = 3461453,
     nome    = "Rivals",
 }
 
 do
-    local place_ok = JOGO_ESPERADO.place
-                     and game.PlaceId == JOGO_ESPERADO.place
+    local place_ok = false
+    for _, id in ipairs(JOGO_ESPERADO.places) do
+        if game.PlaceId == id then place_ok = true break end
+    end
     local dono_ok  = JOGO_ESPERADO.criador
                      and game.CreatorId == JOGO_ESPERADO.criador
 
