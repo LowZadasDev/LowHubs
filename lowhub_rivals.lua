@@ -323,9 +323,6 @@ local CONFIG = {
 
     FlyEnabled      = false,
     FlySpeed         = 55,
-    SpeedEnabled    = false,
-    SpeedValue      = 22,
-
 
     FpsMode         = false,
 
@@ -1709,15 +1706,22 @@ local function start_fly()
     end)
 end
 
-local function apply_speed()
-    local ch = LP.Character
-    if not ch then return end
-    local hum = ch:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    if CONFIG.SpeedEnabled then
-        hum.WalkSpeed = CONFIG.SpeedValue
-    end
-end
+--[[
+    SPEED REMOVIDO
+
+    Tinha um "Increase speed" que mexia no hum.WalkSpeed do seu
+    proprio personagem. Nao funcionava no Rivals - o jogo
+    sobrescreve a velocidade todo frame pelo lado dele, entao
+    qualquer valor que eu escrevesse era apagado no frame
+    seguinte.
+
+    Tirei o codigo junto com a opcao. Opcao que nao faz nada e'
+    pior que opcao nenhuma: voce mexe, nao acontece nada, e fica
+    achando que o hub esta quebrado.
+
+    O Fly continua - esse funciona, porque quem move e' uma
+    BodyVelocity que eu controlo, nao o Humanoid.
+--]]
 
 local fps_guardado = nil
 local POST_FX = {}
@@ -1951,10 +1955,6 @@ local function passo(dt)
         esp_tick = 0
         local ok = pcall(refresh_esp)
         if not ok then end
-    end
-
-    if CONFIG.SpeedEnabled then
-        pcall(apply_speed)
     end
 end
 
@@ -2698,7 +2698,6 @@ local PRESETS = {
             TriggerBot = true, FireDelay = 0.04,
             ESPEnabled = true, ESPBox = true,
             ESPShowHealth = true, ESPShowDist = true,
-            SpeedEnabled = true, SpeedValue = 30,
             ShowFOVCircle = true,
         },
     },
@@ -2727,7 +2726,7 @@ local function coletar_preset()
         "AimKey","AimMouseButton",
         "TriggerBot","FireDelay",
         "ESPEnabled","ESPBox","ESPShowName","ESPShowHealth","ESPShowDist","ESPMaxDistance",
-        "SpeedEnabled","SpeedValue","FlySpeed",
+        "FlyEnabled","FlySpeed",
         "ShowFOVCircle",
     }) do
         t[k] = CONFIG[k]
@@ -3017,9 +3016,9 @@ local function build()
         -- ABINHAS DA ABA AIM
         --
         -- Tudo agora vive dentro de cartoes dobráveis, igual ao
-        -- Tribes. A "Aimlock key" virou secao propria dentro da
-        -- aba de aimlock - era onde ela devia estar desde o
-        -- comeco, ja que so existe por causa do modo HOLD.
+        -- Tribes. A keybind entrou DENTRO da aba de aimlock -
+        -- ela so existe por causa do modo HOLD, entao nao fazia
+        -- sentido ser um cartao separado.
         -- ==================================================
 
         local sMain = criar_secao(pg, 1, "Aimlock")
@@ -3042,18 +3041,11 @@ local function build()
             { rotulo = "ALWAYS", valor = "always" },
         })
 
-        --[[
-            A tecla do aimlock, na propria aba do aimlock.
+        -- a keybind, na mesma aba do aimlock
+        sMain:AddKeybind("Keyboard", "click and press any key", "key")
+        sMain:AddKeybind("Mouse", "click and press a mouse button", "mouse")
 
-            So faz diferenca no modo HOLD - no ALWAYS nao tem o
-            que segurar. Deixo sempre a vista mesmo assim, pra
-            voce configurar antes de trocar o modo.
-        --]]
-        local sKey = criar_secao(pg, 2, "Aimlock key")
-        sKey:AddKeybind("Keyboard", "click and press any key", "key")
-        sKey:AddKeybind("Mouse", "click and press a mouse button", "mouse")
-
-        local sAlvo = criar_secao(pg, 3, "Target")
+        local sAlvo = criar_secao(pg, 2, "Target")
         sAlvo:AddOpcoes("Hitbox", "AimTarget", {
             { rotulo = "HEAD", valor = "HEAD" },
             { rotulo = "BODY", valor = "BODY" },
@@ -3064,13 +3056,13 @@ local function build()
         sAlvo:AddSlider("FOV (pixels)", "AimFOV", 20, 400, 10,
             function(v) return tostring(math.floor(v)) .. "px" end)
 
-        local sTiro = criar_secao(pg, 4, "Fire")
+        local sTiro = criar_secao(pg, 3, "Fire")
         sTiro:AddToggle("Triggerbot", "TriggerBot", nil,
             "fires when your crosshair is ON the target")
         sTiro:AddSlider("Fire interval", "FireDelay", 0.02, 0.4, 0.01,
             function(v) return string.format("%.2fs", v) end)
 
-        local sFiltro = criar_secao(pg, 5, "Filters")
+        local sFiltro = criar_secao(pg, 4, "Filters")
         sFiltro:AddToggle("Wall check", "WallCheck", nil,
             "wont aim at enemies behind walls")
         sFiltro:AddToggle("FOV circle", "ShowFOVCircle", nil,
@@ -3078,7 +3070,7 @@ local function build()
 
         -- deixa a lista de secoes a mao, pra fechar/abrir tudo
         refs.secoes_aim = {
-            sMain, sKey, sAlvo, sTiro, sFiltro,
+            sMain, sAlvo, sTiro, sFiltro,
         }
     end
 
@@ -3086,27 +3078,24 @@ local function build()
     do
         local pg = refs.paginas.VISUAL
 
+        --[[
+            ESP NUMA ABINHA SO
+
+            Antes eram quatro cartoes (ESP / Box / Info / Range).
+            Como sao todos o MESMO assunto, virou um so - menos
+            clique pra achar o que voce quer.
+        --]]
         local sEsp = criar_secao(pg, 1, "ESP")
+
         sEsp:AddToggle("ESP enabled", "ESPEnabled", nil,
             "shows enemies through walls")
-
-        local sCaixa = criar_secao(pg, 2, "Box")
-        sCaixa:AddToggle("Box", "ESPBox", nil,
+        sEsp:AddToggle("Box", "ESPBox", nil,
             "box around the body")
-
-        local sInfo = criar_secao(pg, 3, "Info")
-        sInfo:AddToggle("Name", "ESPShowName", nil)
-        sInfo:AddToggle("Health and distance", "ESPShowHealth", nil,
+        sEsp:AddToggle("Name", "ESPShowName", nil)
+        sEsp:AddToggle("Health", "ESPShowHealth", nil,
             "bar and number, scaled to the 150 this game uses")
-        sInfo:AddToggle("Show distance", "ESPShowDist", nil)
-
-        --[[
-            O Range ficou sozinho numa secao porque e' o ajuste
-            que mais mexe no que voce ve na tela - e foi o que
-            estava sem funcionar (o ESP ignorava ele).
-        --]]
-        local sAlcance = criar_secao(pg, 4, "Range")
-        sAlcance:AddSlider("Range", "ESPMaxDistance", 50, 2000, 50,
+        sEsp:AddToggle("Distance", "ESPShowDist", nil)
+        sEsp:AddSlider("Range", "ESPMaxDistance", 50, 2000, 50,
             function(v) return tostring(math.floor(v)) .. "m" end)
     end
 
@@ -3119,12 +3108,6 @@ local function build()
             function(on) if on then start_fly() else stop_fly() end end,
             "WASD to move, Space up, Ctrl down")
         sVoo:AddSlider("Fly speed", "FlySpeed", 10, 200, 5,
-            function(v) return tostring(math.floor(v)) end)
-
-        local sVel = criar_secao(pg, 2, "Speed")
-        sVel:AddToggle("Increase speed", "SpeedEnabled", nil,
-            "above normal draws attention")
-        sVel:AddSlider("Speed", "SpeedValue", 16, 60, 1,
             function(v) return tostring(math.floor(v)) end)
     end
 

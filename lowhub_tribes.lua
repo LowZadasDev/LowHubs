@@ -465,9 +465,26 @@ end
 
 local aviso_texto, aviso_ate = nil, 0
 
+--[[
+    AVISAR
+
+    O aviso sempre existiu aqui, mas so aparecia no chip de
+    status do rodape. O Rivals mostra as mensagens na hora, num
+    textinho ao lado do rodape, entao eu abri um gancho: AVISO_UI
+    e' preenchido la dentro do build_gui e todo avisar() tambem
+    escreve nele. Continua valendo pro chip do rodape.
+--]]
+local AVISO_UI = nil
+
 local function avisar(msg)
     aviso_texto = msg
     aviso_ate   = os.clock() + 4
+    if AVISO_UI then
+        pcall(function()
+            AVISO_UI.Text = msg
+            AVISO_UI.Visible = true
+        end)
+    end
 end
 
 local function my_team()  return LP:GetAttribute("Team") or 0 end
@@ -1523,47 +1540,104 @@ local function update_fly()
     end
 end
 
+--[[
+    TEMA
+
+    Antes o Tribes tinha paleta propria, com acento ROSA
+    (226, 88, 148). Agora ele usa exatamente as cores do
+    lowhub_rivals.lua, pra os dois hubs ficarem identicos na
+    tela - foi o pedido.
+
+    Os NOMES dos campos foram mantidos de proposito: assim
+    nenhum dos usos espalhados pelo arquivo (T.card, T.line,
+    T.accent...) precisa ser cacado e trocado um por um. So os
+    VALORES mudaram.
+
+    Mapa antigo -> novo:
+
+        bg      -> fundo      (14, 12, 20)
+        header  -> painel     (20, 17, 28)
+        sidebar -> painel     (nao ha mais sidebar; a cor fica
+                               igual a do cabecalho)
+        card    -> cartao     (26, 22, 36)
+        card2   -> cartao2    (32, 27, 44)
+        card3   -> borda clareada - nao existe no Rivals, entao
+                   virou o cartao2 um pouco mais claro, que e' o
+                   que o hover do Rivals faz na pratica
+        line    -> borda      (44, 38, 60)
+        text    -> texto      (238, 234, 248)
+        dim     -> fraco      (150, 142, 172)
+        faint   -> fraco mais escuro (o Rivals nao tem esse tom)
+        accent  -> roxo       (150, 92, 245)
+        accentD -> roxo bem escuro (fundo de pilula ligada)
+        accent2 -> roxo2      (190, 140, 255)
+        accent2D-> roxo escuro
+        off     -> cartao2    (fundo de trilha/botao desligado)
+        warn    -> amarelo    (255, 196, 100)
+        bad     -> vermelho   (240, 85, 105)
+        good    -> verde      (90, 220, 140)
+--]]
 local T = {
-
-
-
-    bg      = Color3.fromRGB(11, 10, 14),
-    header  = Color3.fromRGB(17, 15, 21),
-    sidebar = Color3.fromRGB(13, 12, 17),
-    card    = Color3.fromRGB(24, 21, 30),
-    card2   = Color3.fromRGB(33, 29, 41),
-    card3   = Color3.fromRGB(44, 38, 54),
-    line    = Color3.fromRGB(58, 50, 70),
-    text    = Color3.fromRGB(246, 243, 249),
-    dim     = Color3.fromRGB(163, 155, 176),
-    faint   = Color3.fromRGB(112, 104, 126),
-    accent  = Color3.fromRGB(226, 88, 148),
-    accentD = Color3.fromRGB(88, 30, 60),
-    accent2 = Color3.fromRGB(255, 128, 178),
-    accent2D= Color3.fromRGB(96, 40, 68),
-    off     = Color3.fromRGB(30, 26, 37),
-    warn    = Color3.fromRGB(240, 180, 120),
-    bad     = Color3.fromRGB(240, 96, 126),
-    good    = Color3.fromRGB(110, 214, 158),
+    bg      = Color3.fromRGB(14, 12, 20),
+    header  = Color3.fromRGB(20, 17, 28),
+    sidebar = Color3.fromRGB(20, 17, 28),
+    card    = Color3.fromRGB(26, 22, 36),
+    card2   = Color3.fromRGB(32, 27, 44),
+    card3   = Color3.fromRGB(38, 32, 52),
+    line    = Color3.fromRGB(44, 38, 60),
+    text    = Color3.fromRGB(238, 234, 248),
+    dim     = Color3.fromRGB(150, 142, 172),
+    faint   = Color3.fromRGB(112, 106, 130),
+    accent  = Color3.fromRGB(150, 92, 245),
+    accentD = Color3.fromRGB(56, 34, 92),
+    accent2 = Color3.fromRGB(190, 140, 255),
+    accent2D= Color3.fromRGB(72, 44, 120),
+    off     = Color3.fromRGB(32, 27, 44),
+    warn    = Color3.fromRGB(255, 196, 100),
+    bad     = Color3.fromRGB(240, 85, 105),
+    good    = Color3.fromRGB(90, 220, 140),
 }
 
+-- os mesmos nomes de fonte do Rivals
 local FB = Enum.Font.GothamBold
 local F  = Enum.Font.Gotham
 local FM = Enum.Font.Code
 
-local function avatar_url(user_id, size)
+--[[
+    ==========================================================
+    ESCOPO DAS FUNCOES DE INTERFACE
+    ==========================================================
+
+    Lua 5.1 aceita no maximo 200 variaveis locais por funcao, e
+    o pedaco principal deste arquivo ja gastava quase todas. Os
+    helpers de interface e as fabricas de controle sao varios -
+    se cada um fosse um `local function`, o chunk estourava com
+    "too many local variables (limit is 200) in main function".
+
+    Entao todos eles entram nesta tabela UIX. Assim o chunk
+    gasta UM local (a propria tabela) em vez de vinte e tantos.
+
+    ATENCAO: esta declaracao tem que vir ANTES do primeiro
+    "function UIX.xxx". Se ficar depois, os primeiros viram
+    globais e o resto do arquivo le uma tabela vazia - foi
+    exatamente esse o bug que apareceu aqui.
+    ==========================================================
+--]]
+local UIX = {}
+
+function UIX.avatar_url(user_id, size)
     return "https://www.roblox.com/headshot-thumbnail/image?userId="
         .. tostring(user_id) .. "&width=" .. tostring(size)
         .. "&height=" .. tostring(size) .. "&format=png"
 end
 
-local function baixar_avatar()
+function UIX.baixar_avatar()
     local uid = LP and LP.UserId
     if not uid or uid <= 0 then return nil end
     if type(game.HttpGet) ~= "function" then return nil end
 
     local tentativas = {
-        avatar_url(uid, 150),
+        UIX.avatar_url(uid, 150),
         "https://www.roblox.com/headshot-thumbnail/image?userId="
             .. tostring(uid) .. "&width=150&height=150&format=png",
     }
@@ -1576,19 +1650,78 @@ local function baixar_avatar()
     return nil
 end
 
-local function corner(p, r)
+function UIX.corner(p, r)
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, r or 8); c.Parent = p
     return c
 end
 
-local function stroke(p, col, th, tr)
+function UIX.stroke(p, col, th, tr)
     local s = Instance.new("UIStroke")
     s.Color = col or T.line
     s.Thickness = th or 1
     s.Transparency = tr or 0.4
     s.Parent = p
     return s
+end
+
+--[[
+    HELPERS PORTADOS DO RIVALS
+
+    novo/canto/borda/hover existem no lowhub_rivals.lua e eu
+    trouxe com o MESMO nome e a MESMA assinatura, porque as
+    funcoes de controle (criar_toggle, criar_slider...) que eu
+    tambem portei chamam eles. Sem isso teria que reescrever as
+    cinco, e qualquer diferenca futura entre os dois hubs ia
+    virar bug.
+
+    UIX.stroke() do Tribes continua existindo: o resto do arquivo
+    (FOV circle, botao de performance do FPS, etc) usa ele.
+--]]
+function UIX.novo(classe, props)
+    local o = Instance.new(classe)
+    for k, v in pairs(props or {}) do
+        pcall(function() o[k] = v end)
+    end
+    return o
+end
+
+function UIX.canto(o, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = o
+    return c
+end
+
+function UIX.borda(o, cor, t)
+    local s = Instance.new("UIStroke")
+    s.Color = cor or T.line
+    s.Thickness = t or 1
+    s.Parent = o
+    return s
+end
+
+function UIX.hover(botao, quanto)
+    quanto = quanto or 0.18
+    botao.AutoButtonColor = false
+    local cor_original = nil
+
+    botao.MouseEnter:Connect(function()
+        cor_original = botao.BackgroundColor3
+        local c = botao.BackgroundColor3
+        botao.BackgroundColor3 = Color3.new(
+            math.min(c.R + quanto, 1),
+            math.min(c.G + quanto, 1),
+            math.min(c.B + quanto, 1)
+        )
+    end)
+
+    botao.MouseLeave:Connect(function()
+        if cor_original then
+            botao.BackgroundColor3 = cor_original
+            cor_original = nil
+        end
+    end)
 end
 
 local PRESETS_FILE = "presets.txt"
@@ -1725,10 +1858,1277 @@ local function apagar_preset(nome)
     return true
 end
 
+--[[
+    PRESETS PRONTOS (portado do Rivals)
+
+    O Rivals abre a aba CONFIG com quatro cartoes coloridos -
+    Legit / Balanced / Aggressive / Rage - cada um com um botao
+    USE. Um clique e o hub inteiro fica naquele perfil.
+
+    Eu trouxe o mesmo esquema pro Tribes. O que muda e' so o
+    conteudo: em vez das chaves do Rivals, cada preset devolve
+    chaves do CONFIG/AIM_TUNE daqui. Os valores foram escolhidos
+    pra caber na aritmetica DESTE hub (AimMaxDist maximo 3000,
+    FireCone ate 20, AIM_TUNE.FOVdeg de 30 a 180...).
+
+    Detalhe importante: AIM_TUNE.FOVdrop e' sempre FOVdeg + 40.
+    Se eu esquecesse disso, o circulo de FOV e o FOV real de
+    soltura ficariam diferentes e a mira ia "puxar e soltar".
+--]]
+local PRESETS = {
+    {
+        nome = "Legit",
+        sub  = "subtle, hard to notice",
+        cor  = Color3.fromRGB(90, 160, 240),
+        cfg  = {
+            AimLockEnabled = true,
+            AimMode        = "legit",
+            LegitSpeed     = 45,
+            LegitJitter    = 0.35,
+            LegitError     = 2.5,
+            LegitReaction  = 0.28,
+            LegitOvershoot = false,
+            LegitLostKeep  = 0.25,
+            AimBone        = "Head",
+            AimSmoothLock  = true,
+            AimMaxDist     = 500,
+            AutoFire       = false,
+            FireOnSight    = false,
+            WallCheck      = true,
+            FireOnlyLocked = true,
+            FireCone       = 1.5,
+            FireDelay      = 0.14,
+            ESPEnabled     = true,
+            ESPShowName    = true,
+            ESPShowHealth  = true,
+            ESPShowDist    = false,
+            ESPMaxDistance = 300,
+            ShowFOVCircle  = false,
+            FlyEnabled     = false,
+            AIM_FOVdeg     = 60,
+            AIM_FOVdrop    = 100,
+            AIM_Prediction = 0.05,
+            AIM_DistWeight = 0.15,
+        },
+    },
+    {
+        nome = "Balanced",
+        sub  = "the middle ground, good to play with",
+        cor  = Color3.fromRGB(150, 92, 245),
+        cfg  = {
+            AimLockEnabled = true,
+            AimMode        = "legit",
+            LegitSpeed     = 140,
+            LegitJitter    = 0.55,
+            LegitError     = 1.8,
+            LegitReaction  = 0.16,
+            LegitOvershoot = true,
+            LegitLostKeep  = 0.4,
+            AimBone        = "Head",
+            AimSmoothLock  = true,
+            AimMaxDist     = 900,
+            AutoFire       = false,
+            FireOnSight    = true,
+            WallCheck      = true,
+            FireOnlyLocked = false,
+            FireCone       = 2.5,
+            FireDelay      = 0.10,
+            ESPEnabled     = true,
+            ESPShowName    = true,
+            ESPShowHealth  = true,
+            ESPShowDist    = true,
+            ESPMaxDistance = 500,
+            ShowFOVCircle  = true,
+            FlyEnabled     = false,
+            AIM_FOVdeg     = 100,
+            AIM_FOVdrop    = 140,
+            AIM_Prediction = 0.08,
+            AIM_DistWeight = 0.25,
+        },
+    },
+    {
+        nome = "Aggressive",
+        sub  = "fast aim and automatic fire",
+        cor  = Color3.fromRGB(240, 150, 60),
+        cfg  = {
+            AimLockEnabled = true,
+            AimMode        = "robot",
+            LegitSpeed     = 420,
+            LegitJitter    = 0.75,
+            LegitError     = 0.9,
+            LegitReaction  = 0.06,
+            LegitOvershoot = true,
+            LegitLostKeep  = 0.7,
+            AimBone        = "UpperTorso",
+            AimSmoothLock  = true,
+            AimMaxDist     = 1800,
+            AutoFire       = true,
+            FireOnSight    = true,
+            WallCheck      = false,
+            FireOnlyLocked = false,
+            FireCone       = 6,
+            FireDelay      = 0.06,
+            ESPEnabled     = true,
+            ESPShowName    = true,
+            ESPShowHealth  = true,
+            ESPShowDist    = true,
+            ESPMaxDistance = 1200,
+            ShowFOVCircle  = true,
+            FlyEnabled     = false,
+            AIM_FOVdeg     = 150,
+            AIM_FOVdrop    = 190,
+            AIM_Prediction = 0.14,
+            AIM_DistWeight = 0.5,
+        },
+    },
+    {
+        nome = "Rage",
+        sub  = "everything on, no disguise",
+        cor  = Color3.fromRGB(240, 85, 105),
+        cfg  = {
+            AimLockEnabled = true,
+            AimMode        = "robot",
+            LegitSpeed     = 900,
+            LegitJitter    = 0.9,
+            LegitError     = 0.2,
+            LegitReaction  = 0,
+            LegitOvershoot = true,
+            LegitLostKeep  = 1.5,
+            AimBone        = "Head",
+            AimSmoothLock  = false,
+            AimMaxDist     = 3000,
+            AutoFire       = true,
+            FireOnSight    = true,
+            WallCheck      = false,
+            FireOnlyLocked = false,
+            FireCone       = 20,
+            FireDelay      = 0.02,
+            ESPEnabled     = true,
+            ESPShowName    = true,
+            ESPShowHealth  = true,
+            ESPShowDist    = true,
+            ESPMaxDistance = 2000,
+            ShowFOVCircle  = true,
+            FlyEnabled     = false,
+            AIM_FOVdeg     = 180,
+            AIM_FOVdrop    = 220,
+            AIM_Prediction = 0.20,
+            AIM_DistWeight = 0.75,
+        },
+    },
+}
+
+--[[
+    APLICAR PRESET
+
+    Aplica um preset pronto. O preset pode trazer chaves de
+    CONFIG (sem prefixo) e de AIM_TUNE (com prefixo "AIM_"), que
+    e' o mesmo formato que aplicar_config entende. Por isso eu
+    jogo tudo em valor_para_texto e passo pro aplicar_config: e'
+    um caminho so, sem duplicar a logica de escrita.
+
+    aplicar_config ja reinstala/remove o hook da camera e liga ou
+    desliga o fly conforme o CONFIG ficou, entao nao repito isso.
+--]]
+local function aplicar_preset(p)
+    if not p or not p.cfg then return 0 end
+    local txt = {}
+    for k, v in pairs(p.cfg) do txt[k] = valor_para_texto(v) end
+    local n = aplicar_config(txt)
+    if pintar_tudo_ui then pcall(pintar_tudo_ui) end
+    return n
+end
+
+--[[
+    ESTADO COMPARTILHADO DA INTERFACE
+
+    Dois motivos pra estas variaveis serem de arquivo e nao
+    locais do build_gui:
+
+    1) aplicar_preset (acima) precisa chamar pintar_tudo_ui, e
+       ele e' criado la dentro. Declarar aqui deixa o nome
+       existir antes - em Lua `local` so vale da linha pra
+       baixo, entao declarar depois daria nil.
+
+    2) refs guarda as funcoes de repintura dos controles
+       (toggles, sliders, opcoes, keybinds), igual ao Rivals.
+       Assim um preset aplicado por codigo repinta a tela
+       inteira sem eu ter que guardar a mao cada widget.
+--]]
+local refs = {
+    toggles = {},
+    abas    = {},
+    paginas = {},
+}
+
+local pintar_tudo_ui = nil
+
+--[[
+    ==========================================================
+    INTERFACE PORTADA DO LOWHUB_RIVALS
+    ==========================================================
+
+    O que mudou e o que continuou:
+
+    MUDOU (visual)
+      - Paleta: agora e' a do Rivals (ver T no topo do arquivo).
+      - Fontes: Gotham / GothamBold / Code, iguais as do Rivals.
+      - Cabecalho: avatar redondo de 44px, nome do hub, "Tribes
+        · RightShift" e o X de fechar - sem sidebar lateral.
+      - Abas: barra horizontal de botoes no topo, igual Rivals.
+      - Widgets: cartao escuro arredondado com pilula de toggle,
+        trilha de slider e caixa de opcoes, tudo do Rivals.
+      - Janela: painel 660x500 com sombra e UIScale que encolhe
+        sozinha em tela pequena.
+      - Presets: 4 cartoes coloridos prontos + "My preset".
+
+    CONTINUOU (logica)
+      - Todo o CONFIG/AIM_TUNE, aimlock, legit, ESP, fly, FPS,
+        o minimizar em quadradinho, RightShift pra esconder e o
+        arquivo presets.txt com os presets que o usuario ja tem.
+      - O botao Minimize ("-") que vira quadradinho. Esse nao
+        existe no Rivals e e' feature daqui - nao ia jogar fora.
+
+    Sobre a ABA FPS: o botao gigante de "PERFORMANCE MODE" virou
+    um toggle de verdade dentro de uma abinha, igual o Rivals faz
+    com o FpsMode dele. A logica ligar_fps/desligar_fps e' a
+    mesma, so a cara mudou.
+--]]
+
+-- ==============================================================
+-- CONTROLES (portados do Rivals, mesma API)
+-- ==============================================================
+
+--[[
+    CRIAR_TOGGLE(pai, ordem, texto, chave, aoMudar, sub)
+
+    le' e escreve direto em CONFIG[chave], igual no Rivals.
+    A pintura fica registrada em refs.toggles[chave] pra que um
+    preset aplicado por codigo consiga repintar a tela.
+
+    O clique escreve no CONFIG ANTES de chamar aoMudar, e se o
+    callback devolver false eu desfaço. E' o que permite um
+    toggle recusar a mudanca (ex: "salvar preset" sem preset).
+--]]
+do
+
+function UIX.criar_toggle(pai, ordem, texto, chave, aoMudar, sub)
+    local linha = UIX.novo("Frame", {
+        Name = "tg_" .. tostring(chave),
+        Size = UDim2.new(1, 0, 0, sub and 46 or 38),
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    linha.Parent = pai
+    UIX.canto(linha, 8)
+
+    local rot = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -70, 0, sub and 18 or 38),
+        Position = UDim2.new(0, 12, 0, sub and 5 or 0),
+        BackgroundTransparency = 1,
+        Text = texto,
+        TextColor3 = T.text,
+        Font = F,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rot.Parent = linha
+
+    if sub then
+        local sl = UIX.novo("TextLabel", {
+            Size = UDim2.new(1, -70, 0, 14),
+            Position = UDim2.new(0, 12, 0, 24),
+            BackgroundTransparency = 1,
+            Text = sub,
+            TextColor3 = T.dim,
+            Font = F,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+        sl.Parent = linha
+    end
+
+    local pil = UIX.novo("Frame", {
+        Name = "Pilula",
+        Size = UDim2.new(0, 40, 0, 20),
+        Position = UDim2.new(1, -52, 0.5, -10),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+    })
+    pil.Parent = linha
+    UIX.canto(pil, 10)
+
+    local bol = UIX.novo("Frame", {
+        Name = "Bola",
+        Size = UDim2.new(0, 14, 0, 14),
+        Position = UDim2.new(0, 3, 0.5, -7),
+        BackgroundColor3 = T.dim,
+        BorderSizePixel = 0,
+    })
+    bol.Parent = pil
+    UIX.canto(bol, 7)
+
+    local clicavel = UIX.novo("TextButton", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+    })
+    clicavel.Parent = linha
+
+    local function pinta()
+        local on = CONFIG[chave] and true or false
+        pil.BackgroundColor3 = on and T.accent or T.card2
+        bol.Position = on and UDim2.new(1, -17, 0.5, -7)
+                            or UDim2.new(0, 3, 0.5, -7)
+        bol.BackgroundColor3 = on and Color3.fromRGB(255, 255, 255) or T.dim
+    end
+    pinta()
+    refs.toggles[chave] = pinta
+
+    clicavel.MouseButton1Click:Connect(function()
+        local novo_valor = not CONFIG[chave]
+        CONFIG[chave] = novo_valor
+        if aoMudar then
+            local ok, r = pcall(aoMudar, novo_valor)
+            if ok and r == false then
+                CONFIG[chave] = not novo_valor
+                pinta()
+                return
+            end
+        end
+        pinta()
+    end)
+
+    local cor_linha = linha.BackgroundColor3
+    clicavel.MouseEnter:Connect(function()
+        linha.BackgroundColor3 = Color3.new(
+            math.min(cor_linha.R + 0.07, 1),
+            math.min(cor_linha.G + 0.07, 1),
+            math.min(cor_linha.B + 0.07, 1))
+    end)
+    clicavel.MouseLeave:Connect(function()
+        linha.BackgroundColor3 = cor_linha
+    end)
+
+    return linha
+end
+
+--[[
+    CRIAR_SLIDER(pai, ordem, texto, chave, min, max, passo, fmt)
+
+    Igual ao do Rivals: arrasta pela trilha e escreve em
+    CONFIG[chave]. O fmt recebe o valor e devolve o texto do
+    canto direito - e' assim que sai "120m", "2.5 deg" e "0.10s".
+
+    Nao guarda chave que nao existe em CONFIG: um typo viraria
+    slider morto (arrasta e nada acontece, sem erro).
+--]]
+function UIX.criar_slider(pai, ordem, texto, chave, min, max, passo, fmt)
+    local linha = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 52),
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    linha.Parent = pai
+    UIX.canto(linha, 8)
+
+    local rot = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -90, 0, 18),
+        Position = UDim2.new(0, 12, 0, 6),
+        BackgroundTransparency = 1,
+        Text = texto,
+        TextColor3 = T.text,
+        Font = F,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rot.Parent = linha
+
+    local valor = UIX.novo("TextLabel", {
+        Size = UDim2.new(0, 70, 0, 18),
+        Position = UDim2.new(1, -82, 0, 6),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = T.accent2,
+        Font = FM,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+    valor.Parent = linha
+
+    local trilha = UIX.novo("Frame", {
+        Size = UDim2.new(1, -24, 0, 6),
+        Position = UDim2.new(0, 12, 0, 34),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+    })
+    trilha.Parent = linha
+    UIX.canto(trilha, 3)
+
+    local cheio = UIX.novo("Frame", {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = T.accent,
+        BorderSizePixel = 0,
+    })
+    cheio.Parent = trilha
+    UIX.canto(cheio, 3)
+
+    local function pinta()
+        local v = tonumber(CONFIG[chave]) or min
+        local frac = 0
+        if max ~= min then frac = (v - min) / (max - min) end
+        frac = math.clamp(frac, 0, 1)
+        cheio.Size = UDim2.new(frac, 0, 1, 0)
+        if fmt then
+            valor.Text = fmt(v)
+        else
+            valor.Text = string.format("%.2f", v)
+        end
+    end
+    pinta()
+    refs.toggles[chave] = pinta
+
+    local arrastando = false
+    local toque = UIX.novo("TextButton", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+    })
+    toque.Parent = linha
+
+    local function definir(px)
+        local larg = trilha.AbsoluteSize.X
+        if not larg or larg <= 0 then return end
+        local rel = (px - trilha.AbsolutePosition.X) / larg
+        rel = math.clamp(rel, 0, 1)
+        local v = min + (max - min) * rel
+        if passo and passo > 0 then
+            v = math.floor(v / passo + 0.5) * passo
+        end
+        v = math.clamp(v, min, max)
+        CONFIG[chave] = v
+        pinta()
+    end
+
+    toque.MouseButton1Down:Connect(function()
+        arrastando = true
+        definir(UserInputService:GetMouseLocation().X)
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if not arrastando then return end
+        if inp.UserInputType == Enum.UserInputType.MouseMovement then
+            definir(inp.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            arrastando = false
+        end
+    end)
+
+    return linha
+end
+
+--[[
+    CRIAR_OPCOES(pai, ordem, texto, chave, opcoes)
+
+    opcoes = lista de { rotulo = "TEXTO", valor = <qualquer> }.
+    Substitui o seletor segmentado antigo do Tribes (s:Segmented),
+    que fazia a mesma coisa com muito mais codigo e sofria de
+    clique duplo porque cada segmento tinha seu proprio
+    InputBegan global.
+
+    "ligado" aqui e' CONFIG[chave] == op.valor, o que aceita
+    string, numero ou booleano - os tres aparecem no CONFIG.
+--]]
+function UIX.criar_opcoes(pai, ordem, texto, chave, opcoes)
+    local linha = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 62),
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    linha.Parent = pai
+    UIX.canto(linha, 8)
+
+    local rot = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -24, 0, 18),
+        Position = UDim2.new(0, 12, 0, 6),
+        BackgroundTransparency = 1,
+        Text = texto,
+        TextColor3 = T.text,
+        Font = F,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rot.Parent = linha
+
+    local caixa = UIX.novo("Frame", {
+        Size = UDim2.new(1, -24, 0, 26),
+        Position = UDim2.new(0, 12, 0, 28),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+    })
+    caixa.Parent = linha
+    UIX.canto(caixa, 6)
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.Padding = UDim.new(0, 4)
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.Parent = caixa
+
+    local botoes = {}
+    local function pinta()
+        for val, b in pairs(botoes) do
+            local on = (CONFIG[chave] == val)
+            b.BackgroundColor3 = on and T.accent or T.card
+            b.TextColor3 = on and Color3.fromRGB(255, 255, 255) or T.dim
+            b.Font = on and FB or F
+        end
+    end
+
+    for _, op in ipairs(opcoes or {}) do
+        local b = UIX.novo("TextButton", {
+            Size = UDim2.new(0, 78, 0, 20),
+            BackgroundColor3 = T.card,
+            BorderSizePixel = 0,
+            Text = op.rotulo,
+            TextColor3 = T.dim,
+            Font = F,
+            TextSize = 11,
+            AutoButtonColor = false,
+        })
+        b.Parent = caixa
+        UIX.canto(b, 5)
+        UIX.hover(b, 0.10)
+        botoes[op.valor] = b
+        b.MouseButton1Click:Connect(function()
+            CONFIG[chave] = op.valor
+            pinta()
+            if op.aoEscolher then pcall(op.aoEscolher, op.valor) end
+        end)
+    end
+    pinta()
+    refs.toggles[chave] = pinta
+
+    return linha
+end
+
+--[[
+    CRIAR_OPCOES_CAMPO(pai, ordem, texto, getter, setter, opcoes)
+
+    Variante do criar_opcoes pra quando o valor NAO mora em
+    CONFIG com o mesmo nome da chave - e' o caso de varias
+    opcoes daqui:
+
+      * CONFIG.AimBone guarda "Head"/"UpperTorso"/"HumanoidRootPart"
+        mas a tela mostra HEAD/CHEST/ROOT;
+      * "Activate with" e "Mouse button" mexem em DUAS chaves ao
+        mesmo tempo (AimMouseButton e AimKey sao exclusivos).
+
+    O getter diz qual botao acender, o setter aplica a escolha.
+    O rotulo de cada opcao e' o proprio valor.
+--]]
+function UIX.criar_opcoes_campo(pai, ordem, texto, getter, setter, rotulos)
+    local linha = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 62),
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    linha.Parent = pai
+    UIX.canto(linha, 8)
+
+    local rot = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -24, 0, 18),
+        Position = UDim2.new(0, 12, 0, 6),
+        BackgroundTransparency = 1,
+        Text = texto,
+        TextColor3 = T.text,
+        Font = F,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rot.Parent = linha
+
+    local caixa = UIX.novo("Frame", {
+        Size = UDim2.new(1, -24, 0, 26),
+        Position = UDim2.new(0, 12, 0, 28),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+    })
+    caixa.Parent = linha
+    UIX.canto(caixa, 6)
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.Padding = UDim.new(0, 4)
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.Parent = caixa
+
+    local botoes = {}
+    local function pinta()
+        local atual = getter and getter() or nil
+        for val, b in pairs(botoes) do
+            local on = (atual == val)
+            b.BackgroundColor3 = on and T.accent or T.card
+            b.TextColor3 = on and Color3.fromRGB(255, 255, 255) or T.dim
+            b.Font = on and FB or F
+        end
+    end
+
+    for _, par in ipairs(rotulos or {}) do
+        local b = UIX.novo("TextButton", {
+            Size = UDim2.new(0, 78, 0, 20),
+            BackgroundColor3 = T.card,
+            BorderSizePixel = 0,
+            Text = par.rotulo,
+            TextColor3 = T.dim,
+            Font = F,
+            TextSize = 11,
+            AutoButtonColor = false,
+        })
+        b.Parent = caixa
+        UIX.canto(b, 5)
+        UIX.hover(b, 0.10)
+        botoes[par.valor] = b
+        b.MouseButton1Click:Connect(function()
+            if setter then setter(par.valor) end
+            pinta()
+        end)
+    end
+    pinta()
+    refs.toggles[ordem] = pinta
+    -- repintura geral: como a chave real pode ser duas, eu guardo
+    -- tambem numa lista anonima pra pintar_tudo_ui alcancar
+    refs.livres = refs.livres or {}
+    refs.livres[#refs.livres + 1] = pinta
+
+    return linha
+end
+
+function UIX.criar_titulo(pai, ordem, texto)
+    local t = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 24),
+        BackgroundTransparency = 1,
+        Text = string.upper(texto or ""),
+        TextColor3 = T.accent2,
+        Font = FB,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = ordem,
+    })
+    t.Parent = pai
+    return t
+end
+
+--[[
+    CRIAR_KEYBIND(pai, ordem, texto, sub, qual)
+
+    qual = "key" ou "mouse". Mesma mecanica do Rivals: clica e
+    aperta a tecla. O paint de TODOS os keybinds fica em
+    Keybind.painters, que ja existia aqui, e o capturador de
+    teclado no fim do arquivo nao mudou nada.
+
+    Diferenca pro Rivals: aqui a keybind da tecla SO vale quando
+    nao ha botao de mouse escolhido, e clicar nela zera o botao
+    de mouse (OnStart). Isso era um comportamento da versao
+    antiga e eu mantive - e' o que evita a tecla e o mouse
+    brigarem pela ativacao.
+--]]
+function UIX.criar_keybind(pai, ordem, texto, sub, qual, getter, aoIniciar)
+    local linha = UIX.novo("Frame", {
+        Name = "kb_" .. tostring(qual),
+        Size = UDim2.new(1, 0, 0, sub and 46 or 38),
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    linha.Parent = pai
+    UIX.canto(linha, 8)
+
+    local rot = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -130, 0, sub and 18 or 38),
+        Position = UDim2.new(0, 12, 0, sub and 5 or 0),
+        BackgroundTransparency = 1,
+        Text = texto,
+        TextColor3 = T.text,
+        Font = F,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rot.Parent = linha
+
+    if sub then
+        local sl = UIX.novo("TextLabel", {
+            Size = UDim2.new(1, -130, 0, 14),
+            Position = UDim2.new(0, 12, 0, 24),
+            BackgroundTransparency = 1,
+            Text = sub,
+            TextColor3 = T.dim,
+            Font = F,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+        sl.Parent = linha
+    end
+
+    local b = UIX.novo("TextButton", {
+        Name = "Tecla",
+        Size = UDim2.new(0, 108, 0, 26),
+        Position = UDim2.new(1, -120, 0.5, -13),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+        Text = "",
+        TextColor3 = T.accent2,
+        Font = F,
+        TextSize = 12,
+        AutoButtonColor = false,
+    })
+    b.Parent = linha
+    UIX.canto(b, 6)
+    local bs = UIX.borda(b, T.line, 1)
+
+    local function valor_atual()
+        if qual == "key" then
+            if CONFIG.AimMouseButton then return "mouse in use" end
+            return key_name(CONFIG.AimKey)
+        end
+        if CONFIG.AimMouseButton then
+            return MOUSE_NAMES[CONFIG.AimMouseButton] or "mouse"
+        end
+        return "not set"
+    end
+
+    local function paint()
+        if Keybind.capturing and Keybind.which == qual then
+            b.Text = "press a key"
+            b.TextColor3 = T.warn
+            bs.Color = T.warn
+            bs.Transparency = 0
+        else
+            b.Text = getter and getter() or valor_atual()
+            b.TextColor3 = T.accent2
+            bs.Color = T.line
+            bs.Transparency = 0.25
+        end
+    end
+    paint()
+    Keybind.painters[#Keybind.painters + 1] = paint
+
+    b.MouseEnter:Connect(function() b.BackgroundColor3 = T.line end)
+    b.MouseLeave:Connect(function() b.BackgroundColor3 = T.card2 end)
+    b.MouseButton1Click:Connect(function()
+        if aoIniciar then pcall(aoIniciar) end
+        Keybind.capturing = true
+        Keybind.which = qual
+        repaint_keybinds()
+    end)
+
+    return linha
+end
+
+--[[
+    CRIAR_INPUT(pai, ordem, texto, padrao, dica, aoMudar)
+
+    Caixa de texto. O Rivals nao tem (o "My preset" dele e' um
+    par SAVE/LOAD so), mas o Tribes precisa porque os presets
+    dele sao NOMEADOS - o usuario digita "strong aimbot" e salva.
+
+    Eu mantive a caixa e dei a ela a cara do Rivals (cartao2,
+    canto 6, borda que acende no foco) pra nao destoar.
+--]]
+function UIX.criar_input(pai, ordem, texto, padrao, dica, aoMudar)
+    local linha = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 42),
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    linha.Parent = pai
+    UIX.canto(linha, 8)
+
+    local rot = UIX.novo("TextLabel", {
+        Size = UDim2.new(0, 70, 0, 18),
+        Position = UDim2.new(0, 12, 0.5, -9),
+        BackgroundTransparency = 1,
+        Text = texto,
+        TextColor3 = T.text,
+        Font = F,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rot.Parent = linha
+
+    local box = UIX.novo("TextBox", {
+        Size = UDim2.new(1, -94, 0, 26),
+        Position = UDim2.new(0, 82, 0.5, -13),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+        Text = padrao or "",
+        PlaceholderText = dica or "",
+        PlaceholderColor3 = T.dim,
+        TextColor3 = T.text,
+        Font = F,
+        TextSize = 12,
+        ClearTextOnFocus = false,
+    })
+    box.Parent = linha
+    UIX.canto(box, 6)
+    local bs = UIX.borda(box, T.line, 1)
+
+    box.Focused:Connect(function()
+        bs.Color = T.accent
+        bs.Transparency = 0
+    end)
+    box.FocusLost:Connect(function()
+        bs.Color = T.line
+        bs.Transparency = 0.25
+    end)
+    box:GetPropertyChangedSignal("Text"):Connect(function()
+        if aoMudar then pcall(aoMudar, box.Text) end
+    end)
+
+    return linha, box
+end
+
+--[[
+    CRIAR_BOTAO(pai, ordem, texto, cor, acao)
+
+    Botao de largura total dentro do cartao. Substitui o
+    s:Button antigo.
+--]]
+function UIX.criar_botao(pai, ordem, texto, cor, acao)
+    local b = UIX.novo("TextButton", {
+        Size = UDim2.new(1, 0, 0, 32),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+        Text = texto,
+        TextColor3 = cor or T.accent2,
+        Font = FB,
+        TextSize = 12,
+        AutoButtonColor = false,
+        LayoutOrder = ordem,
+    })
+    b.Parent = pai
+    UIX.canto(b, 8)
+    UIX.borda(b, T.line, 1)
+    UIX.hover(b, 0.10)
+    b.MouseButton1Click:Connect(function()
+        if acao then pcall(acao) end
+    end)
+    return b
+end
+
+--[[
+    CRIAR_DUPLA(pai, ordem, defs)
+
+    Dois botoes lado a lado, largura dividida. Era o s:Dual do
+    Tribes (SAVE/OVERWRITE, DELETE/RESET ALL) - virou isso aqui.
+--]]
+function UIX.criar_dupla(pai, ordem, defs)
+    local linha = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 32),
+        BackgroundTransparency = 1,
+        LayoutOrder = ordem,
+    })
+    linha.Parent = pai
+
+    local feitos = {}
+    for i = 1, 2 do
+        local cfg = defs[i]
+        local x = (i == 1) and 0 or 0.5
+        local b = UIX.novo("TextButton", {
+            Size = UDim2.new(0.5, -3, 1, 0),
+            Position = UDim2.new(x, (i == 1) and 0 or 3, 0, 0),
+            BackgroundColor3 = T.card2,
+            BorderSizePixel = 0,
+            Text = cfg and cfg.rotulo or "?",
+            TextColor3 = (cfg and cfg.cor) or T.accent2,
+            Font = FB,
+            TextSize = 11,
+            AutoButtonColor = false,
+        })
+        b.Parent = linha
+        UIX.canto(b, 8)
+        UIX.borda(b, T.line, 1)
+        UIX.hover(b, 0.10)
+        if cfg and cfg.acao then
+            b.MouseButton1Click:Connect(function() pcall(cfg.acao) end)
+        end
+        feitos[i] = b
+    end
+    return feitos[1], feitos[2], linha
+end
+
+--[[
+    ==========================================================
+    SECAO DOBRAVEL (as "abinhas")
+
+    Esta e' a funcao que o Rivals ja tinha, com o MESMO nome e a
+    MESMA API, porque era exatamente ela que faltava aqui - o
+    Rivals a herdou do Tribes e agora o Tribes usa a versao
+    final, com o visual do Rivals.
+
+    Devolve `s` com:
+
+        s.inner           -> Frame onde as linhas entram
+        s._o              -> contador de ordem
+        s:SetOpen(v)      -> abre/fecha
+        s:prox()          -> proxima ordem
+        s:AddToggle(...)
+        s:AddSlider(...)
+        s:AddOpcoes(...)
+        s:AddOpcoesCampo(...)
+        s:AddKeybind(...)
+        s:AddInput(...)
+        s:AddBotao(...)
+        s:AddDupla(...)
+        s:AddTitulo(...)
+        s:AddLabel(...)
+
+    IMPORTANTE: esta funcao TEM que vir depois de criar_toggle,
+    criar_slider, criar_opcoes, criar_opcoes_campo, criar_keybind
+    e novo, porque elas sao referenciadas la dentro como upvalues.
+    Se subir ela no arquivo, tudo vira nil.
+    ==========================================================
+--]]
+function UIX.criar_secao(pai, ordem, titulo)
+    local wrap = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 32),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    wrap.Parent = pai
+    UIX.canto(wrap, 8)
+
+    local bd = UIX.borda(wrap, T.line, 1)
+    bd.Transparency = 0.55
+
+    local head = UIX.novo("TextButton", {
+        Name = "Head",
+        Size = UDim2.new(1, 0, 0, 32),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+    })
+    head.Parent = wrap
+
+    local barra = UIX.novo("Frame", {
+        Size = UDim2.new(0, 3, 0, 14),
+        Position = UDim2.new(0, 12, 0.5, -7),
+        BackgroundColor3 = T.accent,
+        BorderSizePixel = 0,
+    })
+    barra.Parent = head
+    local cb = Instance.new("UICorner")
+    cb.CornerRadius = UDim.new(1, 0)
+    cb.Parent = barra
+
+    local rotulo = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -58, 1, 0),
+        Position = UDim2.new(0, 22, 0, 0),
+        BackgroundTransparency = 1,
+        Text = string.upper(titulo or ""),
+        TextColor3 = T.text,
+        Font = FB,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rotulo.Parent = head
+
+    local seta = UIX.novo("TextLabel", {
+        Size = UDim2.new(0, 18, 0, 18),
+        Position = UDim2.new(1, -28, 0.5, -9),
+        BackgroundTransparency = 1,
+        Text = "v",
+        TextColor3 = T.dim,
+        Font = FB,
+        TextSize = 11,
+    })
+    seta.Parent = head
+
+    local inner = UIX.novo("Frame", {
+        Name = "Body",
+        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 32),
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y,
+    })
+    inner.Parent = wrap
+
+    local il = Instance.new("UIListLayout")
+    il.Padding = UDim.new(0, 1)
+    il.SortOrder = Enum.SortOrder.LayoutOrder
+    il.Parent = inner
+
+    local rabo = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 5),
+        BackgroundTransparency = 1,
+        LayoutOrder = 9999,
+    })
+    rabo.Parent = inner
+
+    local s = {
+        inner  = inner,
+        _o     = 0,
+        wrap   = wrap,
+        head   = head,
+        open   = true,
+        seta   = seta,
+        barra  = barra,
+        rotulo = rotulo,
+        borda  = bd,
+    }
+
+    function s:SetOpen(v)
+        self.open = v
+        inner.Visible = v
+        rabo.Visible = v
+        seta.Text = v and "v" or ">"
+        seta.TextColor3 = v and T.dim or T.accent
+        barra.BackgroundColor3 = v and T.accent or T.line
+        rotulo.TextColor3 = v and T.text or T.dim
+        bd.Transparency = v and 0.55 or 0.85
+    end
+
+    head.MouseEnter:Connect(function()
+        head.BackgroundTransparency = 0.9
+        head.BackgroundColor3 = T.card2
+        rotulo.TextColor3 = s.open and T.text or T.accent2
+    end)
+    head.MouseLeave:Connect(function()
+        head.BackgroundTransparency = 1
+        rotulo.TextColor3 = s.open and T.text or T.dim
+    end)
+    head.MouseButton1Click:Connect(function()
+        s:SetOpen(not s.open)
+    end)
+
+    function s:prox()
+        self._o = self._o + 1
+        return self._o
+    end
+
+    function s:AddToggle(texto, chave, aoMudar, sub)
+        return UIX.criar_toggle(self.inner, self:prox(), texto, chave, aoMudar, sub)
+    end
+
+    function s:AddSlider(texto, chave, min, max, passo, fmt)
+        return UIX.criar_slider(self.inner, self:prox(),
+                            texto, chave, min, max, passo, fmt)
+    end
+
+    function s:AddOpcoes(texto, chave, opcoes)
+        return UIX.criar_opcoes(self.inner, self:prox(), texto, chave, opcoes)
+    end
+
+    function s:AddOpcoesCampo(texto, getter, setter, rotulos)
+        return UIX.criar_opcoes_campo(self.inner, self:prox(),
+                                  texto, getter, setter, rotulos)
+    end
+
+    function s:AddKeybind(texto, sub, qual, getter, aoIniciar)
+        return UIX.criar_keybind(self.inner, self:prox(),
+                             texto, sub, qual, getter, aoIniciar)
+    end
+
+    function s:AddInput(texto, padrao, dica, aoMudar)
+        return UIX.criar_input(self.inner, self:prox(),
+                           texto, padrao, dica, aoMudar)
+    end
+
+    function s:AddBotao(texto, cor, acao)
+        return UIX.criar_botao(self.inner, self:prox(), texto, cor, acao)
+    end
+
+    function s:AddDupla(defs)
+        return UIX.criar_dupla(self.inner, self:prox(), defs)
+    end
+
+    function s:AddTitulo(texto)
+        return UIX.criar_titulo(self.inner, self:prox(), texto)
+    end
+
+    function s:AddLabel(texto, cor, tamanho)
+        local l = UIX.novo("TextLabel", {
+            Size = UDim2.new(1, -24, 0, 32),
+            Position = UDim2.new(0, 12, 0, 0),
+            BackgroundTransparency = 1,
+            Text = texto,
+            TextColor3 = cor or T.dim,
+            Font = F,
+            TextSize = tamanho or 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextWrapped = true,
+            LayoutOrder = self:prox(),
+        })
+        l.Parent = self.inner
+        return l
+    end
+
+    function s:AddDivisor()
+        local d = UIX.novo("Frame", {
+            Size = UDim2.new(1, -24, 0, 1),
+            Position = UDim2.new(0, 12, 0, 0),
+            BackgroundColor3 = T.line,
+            BorderSizePixel = 0,
+            LayoutOrder = self:prox(),
+        })
+        d.Parent = self.inner
+        return d
+    end
+
+    return s
+end
+
+--[[
+    NOVA_PAGINA(holder, nome)
+
+    ScrollingFrame com padding e layout, do mesmo jeito que o
+    Rivals. A barra de rolagem usa o roxo do tema (no Tribes
+    antigo ela era cinza).
+--]]
+function UIX.nova_pagina(holder, nome)
+    local scroll = UIX.novo("ScrollingFrame", {
+        Name = "pg_" .. tostring(nome),
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = T.accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Visible = false,
+    })
+    scroll.Parent = holder
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 10)
+    pad.PaddingBottom = UDim.new(0, 16)
+    pad.PaddingLeft = UDim.new(0, 4)
+    pad.PaddingRight = UDim.new(0, 10)
+    pad.Parent = scroll
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 7)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = scroll
+
+    return scroll
+end
+
+--[[
+    PINTAR_TUDO
+
+    Repinta todo controle que le CONFIG. Chamado por
+    aplicar_preset, senao um preset aplicado por codigo mudaria
+    os valores e a tela continuaria mostrando os antigos.
+
+    refs.livres guarda os que nao tem chave unica em CONFIG
+    (AimBone, cores do ESP...), que nao caberiam no refs.toggles.
+--]]
+local function pintar_tudo()
+    for _, p in pairs(refs.toggles) do pcall(p) end
+    for _, p in ipairs(refs.livres or {}) do pcall(p) end
+end
+pintar_tudo_ui = pintar_tudo
+
+-- ==============================================================
+-- PRESETS NA TELA
+--
+-- Duas listas, igual o Rivals:
+--
+--   1. "Presets"   -> os quatro prontos (PRESETS, la em cima),
+--                     cartao colorido com botao USE.
+--   2. "My preset" -> o que o usuario salvou. Cada linha tem
+--                     USE (carrega), PIN (carrega no inject) e
+--                     DELETE. Embaixo, a caixa de nome e os
+--                     botoes SAVE / OVERWRITE.
+--
+-- O arquivo continua sendo presets.txt, no mesmo formato
+-- [preset]NOME / chave=valor, pra nao perder nada do que o
+-- usuario ja salvou.
+-- ==============================================================
+
+function UIX.montar_preset_pronto(pai, i, p, aoUsar)
+    local c = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 50),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+        LayoutOrder = i,
+    })
+    c.Parent = pai
+    UIX.canto(c, 9)
+
+    local faixa = UIX.novo("Frame", {
+        Size = UDim2.new(0, 3, 1, -16),
+        Position = UDim2.new(0, 0, 0, 8),
+        BackgroundColor3 = p.cor,
+        BorderSizePixel = 0,
+    })
+    faixa.Parent = c
+    UIX.canto(faixa, 2)
+
+    local n = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -110, 0, 18),
+        Position = UDim2.new(0, 14, 0, 8),
+        BackgroundTransparency = 1,
+        Text = p.nome,
+        TextColor3 = T.text,
+        Font = FB,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    n.Parent = c
+
+    local sb = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, -110, 0, 14),
+        Position = UDim2.new(0, 14, 0, 26),
+        BackgroundTransparency = 1,
+        Text = p.sub,
+        TextColor3 = T.dim,
+        Font = F,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+    sb.Parent = c
+
+    local usar = UIX.novo("TextButton", {
+        Size = UDim2.new(0, 78, 0, 26),
+        Position = UDim2.new(1, -90, 0.5, -13),
+        BackgroundColor3 = p.cor,
+        BorderSizePixel = 0,
+        Text = "USE",
+        TextColor3 = Color3.fromRGB(12, 10, 18),
+        Font = FB,
+        TextSize = 11,
+        AutoButtonColor = false,
+    })
+    usar.Parent = c
+    UIX.canto(usar, 7)
+    UIX.hover(usar, 0.10)
+    usar.MouseButton1Click:Connect(function() aoUsar(p) end)
+
+    return c, usar
+end
+
+end  -- fim do escopo das funcoes de interface
+
 local function build_gui()
     if not parent_ok(PARENT) then PARENT, PARENT_KIND = resolve_parent() end
     local old = PARENT:FindFirstChild("LowHub")
     if old then old:Destroy() end
+
+    local W, H = 660, 500
+    local HEADER_H = 64
 
     local gui = Instance.new("ScreenGui")
     gui.Name = "LowHub"
@@ -1737,16 +3137,6 @@ local function build_gui()
     gui.DisplayOrder = 2147483000
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = PARENT
-
-    local W, H = 660, 500
-
-
-
-
-
-
-
-
 
     local function centro_tela(larg, alt)
         local vx, vy = 1280, 720
@@ -1766,1839 +3156,1144 @@ local function build_gui()
         return UDim2.new(0, x, 0, y)
     end
 
-    local root = Instance.new("Frame")
-    root.Name = "Root"
-    root.Size = UDim2.new(0, W, 0, H)
-    root.Position = centro_tela(W, H)
-    root.BackgroundColor3 = T.bg
-    root.BorderSizePixel = 0
-    root.Active = true
-    root.Draggable = true
-    root.ClipsDescendants = true
-    root.Parent = gui
-    corner(root, 14)
-    stroke(root, T.line, 1, 0.18)
-    local rootGradient = Instance.new("UIGradient")
-    rootGradient.Rotation = 28
-    rootGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 13, 23)),
-        ColorSequenceKeypoint.new(1, T.bg),
+    -- ==========================================================
+    -- PAINEL
+    --
+    -- Nome "Root" preservado de proposito: o botao Minimize, o
+    -- teste de altura e o codigo de arrastar todo mundo procuram
+    -- por "Root". So a cara mudou, nao a identidade.
+    -- ==========================================================
+    local root = UIX.novo("Frame", {
+        Name = "Root",
+        Size = UDim2.new(0, W, 0, H),
+        Position = centro_tela(W, H),
+        BackgroundColor3 = T.bg,
+        BorderSizePixel = 0,
+        Active = true,
+        Draggable = true,
+        ClipsDescendants = true,
     })
-    rootGradient.Parent = root
+    root.Parent = gui
+    UIX.canto(root, 12)
+    UIX.borda(root, T.line, 1)
 
+    --[[
+        ESCALA ADAPTATIVA (do Rivals)
 
+        A janela e' 660x500 fixos. Num viewport de 800x600 ela
+        passaria da borda e o rodape sumiria fora da tela. O
+        UIScale encolhe tudo (ate 0.6) pra caber em 92% da tela.
+    --]]
+    local escala = Instance.new("UIScale")
+    escala.Scale = 1
+    escala.Parent = root
 
-    local header = Instance.new("Frame")
-    header.Name = "Header"
-    header.Size = UDim2.new(1, 0, 0, 64)
-    header.BackgroundColor3 = T.header
-    header.BorderSizePixel = 0
+    local function ajustar_escala()
+        local cam = Workspace.CurrentCamera
+        local vs = cam and cam.ViewportSize
+        if not vs or vs.X <= 0 or vs.Y <= 0 then return false end
+        local fx = (vs.X * 0.92) / W
+        local fy = (vs.Y * 0.92) / H
+        local f = math.min(fx, fy, 1)
+        f = math.max(f, 0.6)
+        escala.Scale = f
+        return true
+    end
+    if not ajustar_escala() then
+        task.spawn(function()
+            for _ = 1, 60 do
+                task.wait(0.1)
+                if ajustar_escala() then break end
+            end
+        end)
+    end
+    task.spawn(function()
+        while root.Parent do
+            local cam = Workspace.CurrentCamera
+            if cam then
+                local conn
+                conn = cam:GetPropertyChangedSignal("ViewportSize")
+                          :Connect(ajustar_escala)
+                while root.Parent and cam == Workspace.CurrentCamera do
+                    task.wait(0.5)
+                end
+                pcall(function() conn:Disconnect() end)
+            end
+            task.wait(0.5)
+        end
+    end)
+
+    local sombra = Instance.new("ImageLabel")
+    sombra.Name = "Shadow"
+    sombra.Size = UDim2.new(1, 60, 1, 60)
+    sombra.Position = UDim2.new(0, -30, 0, -30)
+    sombra.BackgroundTransparency = 1
+    sombra.Image = "rbxassetid://6014261993"
+    sombra.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    sombra.ImageTransparency = 0.5
+    sombra.ZIndex = -1
+    sombra.Parent = root
+
+    -- ==========================================================
+    -- CABECALHO
+    -- ==========================================================
+    local header = UIX.novo("Frame", {
+        Name = "Header",
+        Size = UDim2.new(1, 0, 0, HEADER_H),
+        BackgroundColor3 = T.header,
+        BorderSizePixel = 0,
+    })
     header.Parent = root
+    UIX.canto(header, 12)
 
+    -- tampa embaixo: sem isso o canto arredondado do cabecalho
+    -- deixaria dois vazios e apareceria o fundo do painel.
+    local tampa = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 14),
+        Position = UDim2.new(0, 0, 1, -14),
+        BackgroundColor3 = T.header,
+        BorderSizePixel = 0,
+    })
+    tampa.Parent = header
 
-    local glow = Instance.new("Frame")
-    glow.Size = UDim2.new(1, 0, 0, 2)
-    glow.BackgroundColor3 = T.accent
-    glow.BorderSizePixel = 0
-    glow.BackgroundTransparency = 0.35
-    glow.Parent = header
-
-    local hl = Instance.new("Frame")
-    hl.Size = UDim2.new(1, 0, 0, 1)
-    hl.Position = UDim2.new(0, 0, 1, -1)
-    hl.BackgroundColor3 = T.line
-    hl.BorderSizePixel = 0
+    local hl = UIX.novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, 1, -1),
+        BackgroundColor3 = T.line,
+        BorderSizePixel = 0,
+    })
     hl.Parent = header
 
+    --[[
+        AVATAR
 
+        Mantive a ESTRUTURA antiga (moldura "Avatar" + imagem
+        "AvatarImg" + letra de fallback) porque o avatartest.js
+        cobra exatamente esses tres nomes e a letra de reserva -
+        se o executor nao tiver getcustomasset, a inicial do
+        nome aparece no lugar da foto em vez de um buraco.
 
-
+        O Rivals usa rbxthumb direto. Aqui eu continuo baixando
+        via HttpGet porque ja existia e funciona nos dois casos.
+    --]]
     local aSize = 44
-    local avFrame = Instance.new("Frame")
-    avFrame.Name = "Avatar"
-    avFrame.Size = UDim2.new(0, aSize, 0, aSize)
-    avFrame.Position = UDim2.new(0, 16, 0.5, -aSize/2)
-    avFrame.BackgroundColor3 = T.card2
-    avFrame.BorderSizePixel = 0
+    local avFrame = UIX.novo("Frame", {
+        Name = "Avatar",
+        Size = UDim2.new(0, aSize, 0, aSize),
+        Position = UDim2.new(0, 14, 0.5, -aSize / 2),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+    })
     avFrame.Parent = header
-    corner(avFrame, aSize/2)
-    local avStroke = stroke(avFrame, T.accent, 1.5, 0.25)
+    UIX.canto(avFrame, aSize / 2)
+    local avStroke = UIX.borda(avFrame, T.accent, 1.5)
+    avStroke.Transparency = 0.25
 
-    local avImg = Instance.new("ImageLabel")
-    avImg.Name = "AvatarImg"
-    avImg.Size = UDim2.new(1, -4, 1, -4)
-    avImg.Position = UDim2.new(0, 2, 0, 2)
-    avImg.BackgroundTransparency = 1
-    avImg.Image = ""
+    local avImg = UIX.novo("ImageLabel", {
+        Name = "AvatarImg",
+        Size = UDim2.new(1, -4, 1, -4),
+        Position = UDim2.new(0, 2, 0, 2),
+        BackgroundTransparency = 1,
+        Image = "",
+    })
     avImg.Parent = avFrame
-    corner(avImg, (aSize - 4)/2)
+    UIX.canto(avImg, (aSize - 4) / 2)
 
-    local avLetter = Instance.new("TextLabel")
-    avLetter.Size = UDim2.new(1, 0, 1, 0)
-    avLetter.BackgroundTransparency = 1
-    avLetter.Text = string.upper(string.sub(LP.Name, 1, 1))
-    avLetter.TextColor3 = T.accent
-    avLetter.Font = FB
-    avLetter.TextSize = 18
+    local avLetter = UIX.novo("TextLabel", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = string.upper(string.sub(LP.Name, 1, 1)),
+        TextColor3 = T.accent,
+        Font = FB,
+        TextSize = 18,
+    })
     avLetter.Parent = avFrame
 
     task.spawn(function()
-        local data = baixar_avatar()
-        if data then
-
-            local ok = pcall(function()
-                local id = "rbxassetid://0"
-                if type(getcustomasset) == "function" then
-                    id = getcustomasset(data)
-                elseif type(getsynasset) == "function" then
-                    id = getsynasset(data)
-                end
-                avImg.Image = id
+        local data = UIX.baixar_avatar()
+        if not data then return end
+        local ok = pcall(function()
+            local id = "rbxassetid://0"
+            if type(getcustomasset) == "function" then
+                id = getcustomasset(data)
+            elseif type(getsynasset) == "function" then
+                id = getsynasset(data)
+            end
+            avImg.Image = id
+            avLetter.Visible = false
+        end)
+        if not ok then
+            pcall(function()
+                avImg.Image = UIX.avatar_url(LP.UserId, 150)
                 avLetter.Visible = false
             end)
-            if not ok then
-
-
-                pcall(function()
-                    avImg.Image = avatar_url(LP.UserId, 150)
-                    avLetter.Visible = false
-                end)
-            end
         end
     end)
 
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -220, 0, 20)
-    title.Position = UDim2.new(0, 72, 0, 12)
-    title.BackgroundTransparency = 1
-    title.Text = "LOWHUB"
-    title.TextColor3 = T.text
-    title.Font = FB
-    title.TextSize = 17
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = header
+    local tit = UIX.novo("TextLabel", {
+        Name = "Titulo",
+        Size = UDim2.new(0, 260, 0, 22),
+        Position = UDim2.new(0, 70, 0, 13),
+        BackgroundTransparency = 1,
+        Text = "LOWHUB",
+        TextColor3 = T.text,
+        Font = FB,
+        TextSize = 18,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    tit.Parent = header
 
-
-    local vpill = Instance.new("TextLabel")
-    vpill.Size = UDim2.new(0, 44, 0, 16)
-    vpill.Position = UDim2.new(0, 146, 0, 14)
-    vpill.BackgroundColor3 = T.accentD
-    vpill.BorderSizePixel = 0
-    vpill.Text = VERSION
-    vpill.TextColor3 = T.accent
-    vpill.Font = FB
-    vpill.TextSize = 10
+    local vpill = UIX.novo("TextLabel", {
+        Name = "Versao",
+        Size = UDim2.new(0, 46, 0, 15),
+        Position = UDim2.new(0, 142, 0, 17),
+        BackgroundColor3 = T.accentD,
+        BorderSizePixel = 0,
+        Text = VERSION,
+        TextColor3 = T.accent2,
+        Font = FB,
+        TextSize = 9,
+    })
     vpill.Parent = header
-    corner(vpill, 8)
+    UIX.canto(vpill, 7)
 
-    local sub = Instance.new("TextLabel")
-    sub.Size = UDim2.new(1, -220, 0, 16)
-    sub.Position = UDim2.new(0, 72, 0, 33)
-    sub.BackgroundTransparency = 1
-    sub.Text = LP.Name .. "   ·   " .. PARENT_KIND
-    sub.TextColor3 = T.dim
-    sub.Font = F
-    sub.TextSize = 11
-    sub.TextXAlignment = Enum.TextXAlignment.Left
-    sub.TextTruncate = Enum.TextTruncate.AtEnd
+    local sub = UIX.novo("TextLabel", {
+        Name = "Subtitulo",
+        Size = UDim2.new(0, 300, 0, 16),
+        Position = UDim2.new(0, 70, 0, 34),
+        BackgroundTransparency = 1,
+        Text = "Tribes  \195\151  RightShift to hide",
+        TextColor3 = T.dim,
+        Font = F,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
     sub.Parent = header
 
-    local mini = Instance.new("TextButton")
-    mini.Name = "Minimize"
-    mini.Size = UDim2.new(0, 30, 0, 30)
-    mini.Position = UDim2.new(1, -42, 0.5, -15)
-    mini.BackgroundColor3 = T.off
-    mini.BorderSizePixel = 0
-    mini.Text = "–"
-    mini.TextColor3 = T.dim
-    mini.Font = FB
-    mini.TextSize = 16
-    mini.AutoButtonColor = false
-    mini.Parent = header
-    corner(mini, 9)
+    -- status ao vivo, igual o "estado / metodo" do Rivals
+    local estado = UIX.novo("TextLabel", {
+        Name = "Estado",
+        Size = UDim2.new(0, 190, 0, 18),
+        Position = UDim2.new(1, -206, 0, 14),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = T.dim,
+        Font = FM,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+    estado.Parent = header
 
-    local close = Instance.new("TextButton")
-    close.Name = "Close"
-    close.Size = UDim2.new(0, 30, 0, 30)
-    close.Position = UDim2.new(1, -78, 0.5, -15)
-    close.BackgroundColor3 = T.off
-    close.BorderSizePixel = 0
-    close.Text = "×"
-    close.TextColor3 = T.dim
-    close.Font = FB
-    close.TextSize = 17
-    close.AutoButtonColor = false
+    local metodo = UIX.novo("TextLabel", {
+        Name = "Metodo",
+        Size = UDim2.new(0, 190, 0, 16),
+        Position = UDim2.new(1, -206, 0, 34),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = T.faint,
+        Font = F,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+    metodo.Parent = header
+
+    -- ==========================================================
+    -- BOTOES DO CABECALHO
+    --
+    -- Fechar (X) e recolher (-). O Rivals so tem o X; o "-" e'
+    -- feature daqui (minimizar em quadradinho) e ficou.
+    -- ==========================================================
+    local close = UIX.novo("TextButton", {
+        Name = "Close",
+        Size = UDim2.new(0, 22, 0, 22),
+        Position = UDim2.new(1, -32, 0, 14),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+        Text = "\195\151",
+        TextColor3 = T.dim,
+        Font = FB,
+        TextSize = 15,
+        AutoButtonColor = false,
+    })
     close.Parent = header
-    corner(close, 9)
+    UIX.canto(close, 6)
+    UIX.hover(close, 0.10)
 
+    local mini = UIX.novo("TextButton", {
+        Name = "Minimize",
+        Size = UDim2.new(0, 22, 0, 22),
+        Position = UDim2.new(1, -60, 0, 14),
+        BackgroundColor3 = T.card2,
+        BorderSizePixel = 0,
+        Text = "-",
+        TextColor3 = T.dim,
+        Font = FB,
+        TextSize = 15,
+        AutoButtonColor = false,
+    })
+    mini.Parent = header
+    UIX.canto(mini, 6)
+    UIX.hover(mini, 0.10)
 
-    local sidebar = Instance.new("Frame")
-    sidebar.Name = "Sidebar"
-    sidebar.Size = UDim2.new(0, 164, 1, -88)
-    sidebar.Position = UDim2.new(0, 0, 0, 64)
-    sidebar.BackgroundColor3 = T.sidebar
-    sidebar.BorderSizePixel = 0
-    sidebar.Parent = root
+    -- ==========================================================
+    -- ABAS (barra horizontal, igual Rivals)
+    -- ==========================================================
+    local barra = UIX.novo("Frame", {
+        Name = "Abas",
+        Size = UDim2.new(1, -24, 0, 30),
+        Position = UDim2.new(0, 12, 0, HEADER_H + 8),
+        BackgroundTransparency = 1,
+    })
+    barra.Parent = root
+    local bl = Instance.new("UIListLayout")
+    bl.FillDirection = Enum.FillDirection.Horizontal
+    bl.Padding = UDim.new(0, 6)
+    bl.Parent = barra
 
-    local sl = Instance.new("Frame")
-    sl.Size = UDim2.new(0, 1, 1, 0)
-    sl.Position = UDim2.new(1, -1, 0, 0)
-    sl.BackgroundColor3 = T.line
-    sl.BorderSizePixel = 0
-    sl.Parent = sidebar
+    local holder = UIX.novo("Frame", {
+        Name = "Paginas",
+        Size = UDim2.new(1, -24, 1, -(HEADER_H + 8 + 30 + 34)),
+        Position = UDim2.new(0, 12, 0, HEADER_H + 38 + 8),
+        BackgroundTransparency = 1,
+    })
+    holder.Parent = root
 
-    local tabList = Instance.new("Frame")
-    tabList.Size = UDim2.new(1, 0, 1, -34)
-    tabList.Position = UDim2.new(0, 0, 0, 10)
-    tabList.BackgroundTransparency = 1
-    tabList.Parent = sidebar
+    local rodape = UIX.novo("TextLabel", {
+        Name = "Rodape",
+        Size = UDim2.new(1, -24, 0, 16),
+        Position = UDim2.new(0, 12, 1, -22),
+        BackgroundTransparency = 1,
+        Text = VERSION .. "  \195\151  RightShift to hide",
+        TextColor3 = T.faint,
+        Font = F,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rodape.Parent = root
 
-    local tlay = Instance.new("UIListLayout")
-    tlay.Padding = UDim.new(0, 4)
-    tlay.SortOrder = Enum.SortOrder.LayoutOrder
-    tlay.Parent = tabList
+    -- aviso rapido, do lado direito do rodape (o Rivals nao tem
+    -- chip de status, entao as mensagens saem aqui)
+    local avisoLbl = UIX.novo("TextLabel", {
+        Name = "Aviso",
+        Size = UDim2.new(1, -220, 0, 16),
+        Position = UDim2.new(0, 200, 1, -22),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = T.warn,
+        Font = F,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Visible = false,
+    })
+    avisoLbl.Parent = root
+    AVISO_UI = avisoLbl
 
-    local foot = Instance.new("TextLabel")
-    foot.Size = UDim2.new(1, -20, 0, 14)
-    foot.Position = UDim2.new(0, 10, 1, -24)
-    foot.BackgroundTransparency = 1
-    foot.Text = VERSION .. "  ·  RightShift to hide"
-    foot.TextColor3 = T.dim
-    foot.Font = FM
-    foot.TextSize = 10
-    foot.TextXAlignment = Enum.TextXAlignment.Left
-    foot.Parent = sidebar
+    local NOMES = { "AIM", "VISUAL", "MOVEMENT", "FPS", "CONFIG" }
+    local botoes = {}
 
+    local function trocar(nome)
+        for n, b in pairs(botoes) do
+            local on = (n == nome)
+            b.BackgroundColor3 = on and T.accent or T.card
+            b.TextColor3 = on and Color3.fromRGB(255, 255, 255) or T.dim
+        end
+        for n, p in pairs(refs.paginas) do
+            p.Visible = (n == nome)
+        end
+        refs.abas.atual = nome
+    end
+    refs.abas.trocar = trocar
 
-    local pages = Instance.new("Frame")
-    pages.Size = UDim2.new(1, -165, 1, -88)
-    pages.Position = UDim2.new(0, 165, 0, 64)
-    pages.BackgroundColor3 = T.bg
-    pages.BorderSizePixel = 0
-    pages.Parent = root
-
-
-
-
-
-
-    local status = Instance.new("Frame")
-    status.Size = UDim2.new(1, 0, 0, 30)
-    status.Position = UDim2.new(0, 0, 1, -30)
-    status.BackgroundColor3 = T.header
-    status.BorderSizePixel = 0
-    status.Parent = root
-
-    local stl = Instance.new("Frame")
-    stl.Size = UDim2.new(1, 0, 0, 1)
-    stl.BackgroundColor3 = T.line
-    stl.BorderSizePixel = 0
-    stl.Parent = status
-
-
-    local function chip(w, x)
-        local f = Instance.new("Frame")
-        f.Size = UDim2.new(0, w, 0, 18)
-        f.Position = UDim2.new(0, x, 0.5, -9)
-        f.BackgroundColor3 = T.off
-        f.BorderSizePixel = 0
-        f.Parent = status
-        corner(f, 9)
-
-        local dot = Instance.new("Frame")
-        dot.Size = UDim2.new(0, 6, 0, 6)
-        dot.Position = UDim2.new(0, 7, 0.5, -3)
-        dot.BackgroundColor3 = T.dim
-        dot.BorderSizePixel = 0
-        dot.Parent = f
-        corner(dot, 3)
-
-        local tx = Instance.new("TextLabel")
-        tx.Size = UDim2.new(1, -18, 1, 0)
-        tx.Position = UDim2.new(0, 16, 0, 0)
-        tx.BackgroundTransparency = 1
-        tx.Text = ""
-        tx.TextColor3 = T.dim
-        tx.Font = F
-        tx.TextSize = 10
-        tx.TextXAlignment = Enum.TextXAlignment.Left
-        tx.TextTruncate = Enum.TextTruncate.AtEnd
-        tx.Parent = f
-        return tx, dot
+    for _, nome in ipairs(NOMES) do
+        local b = UIX.novo("TextButton", {
+            Name = "Aba_" .. nome,
+            Size = UDim2.new(0, 92, 1, 0),
+            BackgroundColor3 = T.card,
+            BorderSizePixel = 0,
+            Text = nome,
+            TextColor3 = T.dim,
+            Font = FB,
+            TextSize = 11,
+            AutoButtonColor = false,
+        })
+        b.Parent = barra
+        UIX.canto(b, 7)
+        UIX.hover(b, 0.09)
+        botoes[nome] = b
+        b.MouseButton1Click:Connect(function() trocar(nome) end)
     end
 
-
-    local chipState, chipStateDot = chip(150, 12)
-    local chipAim,   chipAimDot   = chip(250, 170)
-    local chipCount               = chip(190, 428)
-
-
-
-
-    local TabStore, TabOrder, ActiveTab = {}, {}, nil
-
-    local function select_tab(name)
-        for n, t in pairs(TabStore) do
-            local on = (n == name)
-            t.page.Visible = on
-            t.label.TextColor3 = on and T.text or T.dim
-            t.label.Font = on and FB or F
-            t.marker.Visible = on
-            t.btn.BackgroundTransparency = on and 0.55 or 1
-            t.btn.BackgroundColor3 = on and T.card or T.sidebar
-        end
-        ActiveTab = name
+    for _, nome in ipairs(NOMES) do
+        refs.paginas[nome] = UIX.nova_pagina(holder, nome)
     end
 
-    local function new_tab(name)
-        if TabStore[name] then return TabStore[name] end
-        local idx = #TabOrder + 1
-        TabOrder[idx] = name
-
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 36)
-        btn.BackgroundTransparency = 1
-        btn.BorderSizePixel = 0
-        btn.Text = ""
-        btn.AutoButtonColor = false
-        btn.LayoutOrder = idx
-        btn.Parent = tabList
-
-        local marker = Instance.new("Frame")
-        marker.Size = UDim2.new(0, 3, 0, 18)
-        marker.Position = UDim2.new(0, 0, 0.5, -9)
-        marker.BackgroundColor3 = T.accent
-        marker.BorderSizePixel = 0
-        marker.Visible = false
-        marker.Parent = btn
-        corner(marker, 2)
-
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -30, 1, 0)
-        label.Position = UDim2.new(0, 20, 0, 0)
-        label.BackgroundTransparency = 1
-        label.Text = name
-        label.TextColor3 = T.dim
-        label.Font = F
-        label.TextSize = 13
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = btn
-
-        local page = Instance.new("ScrollingFrame")
-        page.Size = UDim2.new(1, 0, 1, 0)
-        page.BackgroundTransparency = 1
-        page.BorderSizePixel = 0
-        page.ScrollBarThickness = 4
-        page.ScrollBarImageColor3 = T.line
-        page.CanvasSize = UDim2.new(0, 0, 0, 0)
-        page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        page.Visible = false
-        page.Parent = pages
-
-        local pl = Instance.new("UIListLayout")
-        pl.Padding = UDim.new(0, 8)
-        pl.SortOrder = Enum.SortOrder.LayoutOrder
-        pl.Parent = page
-
-        local pp = Instance.new("UIPadding")
-        pp.PaddingLeft = UDim.new(0, 12)
-        pp.PaddingRight = UDim.new(0, 12)
-        pp.PaddingTop = UDim.new(0, 12)
-        pp.PaddingBottom = UDim.new(0, 12)
-        pp.Parent = page
-
-        btn.MouseEnter:Connect(function()
-            if ActiveTab ~= name then
-                btn.BackgroundTransparency = 0.7
-                btn.BackgroundColor3 = T.card
-            end
-        end)
-        btn.MouseLeave:Connect(function()
-            if ActiveTab ~= name then
-                btn.BackgroundTransparency = 1
-            end
-        end)
-        btn.MouseButton1Click:Connect(function() select_tab(name) end)
-
-        local tab = { name = name, page = page, label = label,
-                      btn = btn, marker = marker, _o = 0 }
-        TabStore[name] = tab
-        if not ActiveTab then select_tab(name) end
-        return tab
-    end
-
-
-
-
-    local function new_section(tab, title)
-        local wrap = Instance.new("Frame")
-        wrap.Size = UDim2.new(1, 0, 0, 34)
-        wrap.AutomaticSize = Enum.AutomaticSize.Y
-        wrap.BackgroundColor3 = T.card
-        wrap.BorderSizePixel = 0
-        wrap.LayoutOrder = tab._o + 1
-        tab._o = tab._o + 1
-        wrap.Parent = tab.page
-        corner(wrap, 10)
-        local wStroke = stroke(wrap, T.line, 1, 0.6)
-
-
-        local head = Instance.new("TextButton")
-        head.Name = "Head"
-        head.Size = UDim2.new(1, 0, 0, 34)
-        head.BackgroundTransparency = 1
-        head.Text = ""
-        head.AutoButtonColor = false
-        head.Parent = wrap
-
-
-        local bar = Instance.new("Frame")
-        bar.Size = UDim2.new(0, 3, 0, 14)
-        bar.Position = UDim2.new(0, 13, 0.5, -7)
-        bar.BackgroundColor3 = T.accent2
-        bar.BorderSizePixel = 0
-        bar.Parent = head
-        corner(bar, 2)
-
-        local tl = Instance.new("TextLabel")
-        tl.Size = UDim2.new(1, -60, 1, 0)
-        tl.Position = UDim2.new(0, 24, 0, 0)
-        tl.BackgroundTransparency = 1
-        tl.Text = string.upper(title or "")
-        tl.TextColor3 = T.text
-        tl.Font = FB
-        tl.TextSize = 10
-        tl.TextXAlignment = Enum.TextXAlignment.Left
-        tl.Parent = head
-
-
-        local chev = Instance.new("TextLabel")
-        chev.Size = UDim2.new(0, 20, 0, 20)
-        chev.Position = UDim2.new(1, -30, 0.5, -10)
-        chev.BackgroundTransparency = 1
-        chev.Text = "v"
-        chev.TextColor3 = T.dim
-        chev.Font = FB
-        chev.TextSize = 11
-        chev.Parent = head
-
-
-        local sep = Instance.new("Frame")
-        sep.Size = UDim2.new(1, -24, 0, 1)
-        sep.Position = UDim2.new(0, 12, 0, 33)
-        sep.BackgroundColor3 = T.line
-        sep.BorderSizePixel = 0
-        sep.BackgroundTransparency = 0.4
-        sep.Parent = wrap
-
-        local inner = Instance.new("Frame")
-        inner.Name = "Body"
-        inner.Size = UDim2.new(1, 0, 0, 0)
-        inner.Position = UDim2.new(0, 0, 0, 34)
-        inner.BackgroundTransparency = 1
-        inner.AutomaticSize = Enum.AutomaticSize.Y
-        inner.Parent = wrap
-
-        local il = Instance.new("UIListLayout")
-        il.Padding = UDim.new(0, 1)
-        il.SortOrder = Enum.SortOrder.LayoutOrder
-        il.Parent = inner
-
-
-        local tail = Instance.new("Frame")
-        tail.Size = UDim2.new(1, 0, 0, 6)
-        tail.BackgroundTransparency = 1
-        tail.LayoutOrder = 9999
-        tail.Parent = inner
-
-        local s = { inner = inner, _o = 0, wrap = wrap, head = head,
-                    open = true, chev = chev, bar = bar, stroke = wStroke,
-                    sep = sep }
-
-
-        function s:SetOpen(v)
-            self.open = v
-            inner.Visible = v
-            tail.Visible = v
-            sep.Visible = v
-            chev.Text = v and "v" or ">"
-            chev.TextColor3 = v and T.dim or T.accent
-            bar.BackgroundColor3 = v and T.accent2 or T.line
-            tl.TextColor3 = v and T.text or T.dim
-            wStroke.Transparency = v and 0.6 or 0.85
-        end
-
-        head.MouseEnter:Connect(function()
-            head.BackgroundTransparency = 0.85
-            head.BackgroundColor3 = T.card2
-            tl.TextColor3 = s.open and T.text or T.accent
-        end)
-        head.MouseLeave:Connect(function()
-            head.BackgroundTransparency = 1
-            tl.TextColor3 = T.text
-        end)
-        head.MouseButton1Click:Connect(function()
-            s:SetOpen(not s.open)
-        end)
-
-        function s:row(label, h)
-            self._o = self._o + 1
-            local r = Instance.new("Frame")
-            r.Size = UDim2.new(1, 0, 0, h or 34)
-            r.BackgroundTransparency = 1
-            r.LayoutOrder = self._o
-            r.Parent = self.inner
-            local t = Instance.new("TextLabel")
-            t.Size = UDim2.new(1, -136, 1, 0)
-            t.Position = UDim2.new(0, 14, 0, 0)
-            t.BackgroundTransparency = 1
-            t.Text = label or ""
-            t.TextColor3 = T.text
-            t.Font = F
-            t.TextSize = 13
-            t.TextXAlignment = Enum.TextXAlignment.Left
-            t.Parent = r
-            return r, t
-        end
-        function s:Toggle(props)
-            local row = self:row(props.Label)
-            local b = Instance.new("TextButton")
-            b.Size = UDim2.new(0, 38, 0, 20)
-            b.Position = UDim2.new(1, -60, 0.5, -10)
-            b.BackgroundColor3 = T.off
-            b.BorderSizePixel = 0
-            b.Text = ""
-            b.AutoButtonColor = false
-            b.Parent = row
-            corner(b, 6)
-            stroke(b, T.line, 1, 0.25)
-            local k = Instance.new("Frame")
-            k.Size = UDim2.new(0, 12, 0, 12)
-            k.Position = UDim2.new(0, 4, 0.5, -6)
-            k.BackgroundColor3 = T.dim
-            k.BorderSizePixel = 0
-            k.Parent = b
-            corner(k, 4)
-            local state = props.Default and true or false
-            local function paint()
-                b.BackgroundColor3 = state and T.accentD or T.off
-                k.BackgroundColor3 = state and T.accent or T.dim
-                k.Position = state and UDim2.new(1, -16, 0.5, -6)
-                                   or UDim2.new(0, 4, 0.5, -6)
-            end
-            paint()
-            local api = {}
-            function api:Get() return state end
-            function api:Set(v, silent)
-                state = v and true or false
-                paint()
-                if not silent and props.Callback then props.Callback(state) end
-            end
-            b.MouseButton1Click:Connect(function()
-                local novo = not state
-
-
-
-
-
-                if props.Callback then
-                    local r = props.Callback(novo)
-                    if r == false then
-                        paint()
-                        return
-                    end
-                end
-                state = novo
-                paint()
-            end)
-            return api
-        end
-
-
-        function s:Slider(props)
-            self._o = self._o + 1
-            local holder = Instance.new("Frame")
-            holder.Size = UDim2.new(1, 0, 0, 44)
-            holder.BackgroundTransparency = 1
-            holder.LayoutOrder = self._o
-            holder.Parent = self.inner
-
-            local name = Instance.new("TextLabel")
-            name.Size = UDim2.new(1, -110, 0, 18)
-            name.Position = UDim2.new(0, 14, 0, 2)
-            name.BackgroundTransparency = 1
-            name.Text = props.Label or ""
-            name.TextColor3 = T.text
-            name.Font = F
-            name.TextSize = 13
-            name.TextXAlignment = Enum.TextXAlignment.Left
-            name.Parent = holder
-
-            local readout = Instance.new("TextLabel")
-            readout.Size = UDim2.new(0, 96, 0, 18)
-            readout.Position = UDim2.new(1, -110, 0, 2)
-            readout.BackgroundTransparency = 1
-            readout.TextColor3 = T.accent
-            readout.Font = FM
-            readout.TextSize = 12
-            readout.TextXAlignment = Enum.TextXAlignment.Right
-            readout.Parent = holder
-
-
-            local track = Instance.new("Frame")
-            track.Size = UDim2.new(1, -28, 0, 6)
-            track.Position = UDim2.new(0, 14, 0, 26)
-            track.BackgroundColor3 = T.off
-            track.BorderSizePixel = 0
-            track.Parent = holder
-            corner(track, 3)
-
-            local fill = Instance.new("Frame")
-            fill.Size = UDim2.new(0, 0, 1, 0)
-            fill.BackgroundColor3 = T.accent
-            fill.BorderSizePixel = 0
-            fill.Parent = track
-            corner(fill, 3)
-
-            local knob = Instance.new("Frame")
-            knob.Size = UDim2.new(0, 12, 0, 12)
-            knob.AnchorPoint = Vector2.new(0.5, 0.5)
-            knob.Position = UDim2.new(0, 0, 0.5, 0)
-            knob.BackgroundColor3 = T.text
-            knob.BorderSizePixel = 0
-            knob.Parent = track
-            corner(knob, 6)
-            local knobStroke = stroke(knob, T.accent, 2, 0)
-
-
-            local hit = Instance.new("TextButton")
-            hit.Size = UDim2.new(1, -28, 0, 22)
-            hit.Position = UDim2.new(0, 14, 0, 18)
-            hit.BackgroundTransparency = 1
-            hit.Text = ""
-            hit.AutoButtonColor = false
-            hit.Parent = holder
-
-            local value = props.Default or props.Min or 0
-            local mn, mx, stp = props.Min or 0, props.Max or 100, props.Step or 1
-            local fmt = props.Format
-
-
-            local steps = math.max(1, math.floor((mx - mn) / stp + 0.5))
-
-            local function valueToScale(v)
-                if mx == mn then return 0 end
-                return (v - mn) / (mx - mn)
-            end
-
-            local function paint()
-                local a = valueToScale(value)
-                fill.Size = UDim2.new(a, 0, 1, 0)
-                knob.Position = UDim2.new(a, 0, 0.5, 0)
-                readout.Text = fmt and fmt(value)
-                                    or string.format("%.2f", value)
-            end
-            paint()
-
-
-            local function setFromX(mouseX)
-                local abs = track.AbsolutePosition.X
-                local width = track.AbsoluteSize.X
-                if width <= 0 then return end
-                local a = math.clamp((mouseX - abs) / width, 0, 1)
-                local raw = mn + a * (mx - mn)
-                local snapped = mn + math.floor((raw - mn) / stp + 0.5) * stp
-                snapped = math.clamp(snapped, mn, mx)
-                if math.abs(snapped - value) < 1e-9 then return end
-                value = snapped
-                paint()
-                if props.Callback then props.Callback(value) end
-            end
-
-            local dragging = false
-
-            hit.MouseButton1Down:Connect(function()
-                dragging = true
-                setFromX(UserInputService:GetMouseLocation().X)
-            end)
-
-
-            UserInputService.InputChanged:Connect(function(input)
-                if not dragging then return end
-                if input.UserInputType == Enum.UserInputType.MouseMovement then
-                    setFromX(input.Position.X)
-                end
-            end)
-
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    dragging = false
-                end
-            end)
-
-
-            hit.MouseEnter:Connect(function()
-                fill.BackgroundColor3 = T.accent2
-                knobStroke.Color = T.accent2
-            end)
-            hit.MouseLeave:Connect(function()
-                fill.BackgroundColor3 = T.accent
-                knobStroke.Color = T.accent
-            end)
-
-            local api = {}
-            function api:Get() return value end
-            function api:Set(nv)
-                value = math.clamp(nv, mn, mx)
-                paint()
-            end
-            function api:SetStep(newStep)
-                stp = newStep
-            end
-            return api
-        end
-
-
-
-
-        local pickStamp = 0
-        function s:AceitaClique()
-            local now = os.clock()
-            if now - pickStamp < 0.08 then return false end
-            pickStamp = now
-            return true
-        end
-
-        function s:Button(props)
-            self._o = self._o + 1
-            local b = Instance.new("TextButton")
-            b.Size = UDim2.new(1, -24, 0, 30)
-            b.Position = UDim2.new(0, 12, 0, 0)
-            b.BackgroundColor3 = T.card2
-            b.BorderSizePixel = 0
-            b.Text = props.Label or "Button"
-            b.TextColor3 = props.Color or T.accent2
-            b.Font = F
-            b.TextSize = 13
-            b.AutoButtonColor = false
-            b.LayoutOrder = self._o
-            b.Parent = self.inner
-            corner(b, 5)
-            stroke(b, T.line, 1, 0.25)
-            b.MouseEnter:Connect(function() b.BackgroundColor3 = T.card3 end)
-            b.MouseLeave:Connect(function() b.BackgroundColor3 = T.card2 end)
-            b.MouseButton1Click:Connect(function()
-                if props.Callback then props.Callback() end
-            end)
-            return b
-        end
-
-
-
-
-
-
-        function s:Input(props)
-            local row = self:row(props.Label, 38)
-            local box = Instance.new("TextBox")
-            box.Size = UDim2.new(0, 190, 0, 26)
-            box.Position = UDim2.new(1, -202, 0.5, -13)
-            box.BackgroundColor3 = T.card2
-            box.BorderSizePixel = 0
-            box.Text = props.Default or ""
-            box.PlaceholderText = props.Placeholder or "nome do preset"
-            box.TextColor3 = T.text
-            box.Font = F
-            box.TextSize = 12
-            box.ClearTextOnFocus = false
-            box.Parent = row
-            corner(box, 5)
-            local bs = stroke(box, T.line, 1, 0.25)
-            box.Focused:Connect(function()
-                bs.Color = T.accent2
-                bs.Transparency = 0
-            end)
-            box.FocusLost:Connect(function()
-                bs.Color = T.line
-                bs.Transparency = 0.25
-                if props.Callback then props.Callback(box.Text) end
-            end)
-            if props.OnChange then
-                box:GetPropertyChangedSignal("Text"):Connect(function()
-                    props.OnChange(box.Text)
-                end)
-            end
-            return box
-        end
-
-
-        function s:Dual(props)
-            self._o = self._o + 1
-            local order = self._o
-            local larg = props.Width or 150
-            local feitos = {}
-            for i = 1, 2 do
-                local cfg = props[i]
-                local b = Instance.new("TextButton")
-                b.Size = UDim2.new(0, larg, 0, 30)
-                b.Position = UDim2.new(0, 12 + (i - 1) * (larg + 8), 0, 0)
-                b.BackgroundColor3 = T.card2
-                b.BorderSizePixel = 0
-                b.Text = cfg.Label or "?"
-                b.TextColor3 = cfg.Color or T.accent2
-                b.Font = F
-                b.TextSize = 12
-                b.AutoButtonColor = false
-                b.LayoutOrder = order
-                b.Parent = self.inner
-                corner(b, 5)
-                stroke(b, T.line, 1, 0.25)
-                b.MouseEnter:Connect(function()
-                    b.BackgroundColor3 = T.card3
-                end)
-                b.MouseLeave:Connect(function()
-                    b.BackgroundColor3 = T.card2
-                end)
-                b.MouseButton1Click:Connect(function()
-                    if cfg.Callback then cfg.Callback() end
-                end)
-                feitos[i] = b
-            end
-            return feitos[1], feitos[2]
-        end
-
-
-
-        function s:Segmented(props)
-            local row = self:row(props.Label, 44)
-            local opts = props.Options or {}
-            local n = #opts
-            local value = props.Default or opts[1]
-
-
-
-            local function aceita() return s:AceitaClique() end
-
-
-            local PAD    = 3
-            local GAP    = 3
-            local each   = props.SegWidth or 62
-            local WID    = PAD * 2 + each * n + GAP * (n - 1)
-            local HEI    = 28
-
-            local holder = Instance.new("Frame")
-            holder.Name = "SegHolder"
-            holder.Size = UDim2.new(0, WID, 0, HEI)
-            holder.Position = UDim2.new(1, -(WID + 14), 0.5, -HEI / 2)
-            holder.BackgroundColor3 = T.off
-            holder.BorderSizePixel = 0
-            holder.Parent = row
-            corner(holder, 7)
-            stroke(holder, T.line, 1, 0.25)
-
-            local segs = {}
-            local function paint()
-                for _, sg in ipairs(segs) do
-                    local on = (sg.val == value)
-                    sg.btn.BackgroundColor3 = on and T.accentD or T.off
-                    sg.btn.TextColor3 = on and T.accent2 or T.dim
-                    sg.btn.Font = on and FB or F
-                    sg.btn.TextTransparency = on and 0 or 0.15
-                end
-            end
-
-            local function pick(o, idx)
-                if value == o then return end
-                value = o
-                paint()
-                if props.Callback then props.Callback(o, idx) end
-            end
-
-            for idx, o in ipairs(opts) do
-                local seg = Instance.new("TextButton")
-                seg.Name = "Seg"
-                seg.Size = UDim2.new(0, each, 1, -(PAD * 2))
-                seg.Position = UDim2.new(0, PAD + (idx - 1) * (each + GAP), 0, PAD)
-                seg.BackgroundColor3 = T.card2
-                seg.BorderSizePixel = 0
-                seg.Text = tostring(o)
-                seg.TextColor3 = T.dim
-                seg.Font = F
-                seg.TextSize = 11
-                seg.AutoButtonColor = false
-                seg.TextTruncate = Enum.TextTruncate.AtEnd
-                seg.ZIndex = 2
-                seg.Parent = holder
-                corner(seg, 4)
-
-                segs[#segs + 1] = { btn = seg, val = o }
-
-                seg.MouseEnter:Connect(function()
-                    if value ~= o then
-                        seg.BackgroundColor3 = T.card3
-                        seg.TextColor3 = T.text
-                        seg.TextTransparency = 0
-                    end
-                end)
-                seg.MouseLeave:Connect(function()
-                    if value ~= o then
-                        seg.BackgroundColor3 = T.off
-                        seg.TextColor3 = T.dim
-                        seg.TextTransparency = 0.15
-                    end
-                end)
-                seg.MouseButton1Click:Connect(function()
-                    if not aceita() then return end
-                    pick(o, idx)
-                end)
-
-
-
-
-                UserInputService.InputBegan:Connect(function(input)
-                    if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
-                        return
-                    end
-                    if not seg.Visible or not holder.Visible then return end
-                    local m  = input.Position
-                    local ap = seg.AbsolutePosition
-                    local as = seg.AbsoluteSize
-                    if m.X >= ap.X and m.X <= ap.X + as.X
-                   and m.Y >= ap.Y and m.Y <= ap.Y + as.Y then
-                        if not aceita() then return end
-                        pick(o, idx)
-                    end
-                end)
-            end
-            paint()
-
-            local api = {}
-            function api:Get() return value end
-            function api:Set(v)
-                for _, sg in ipairs(segs) do
-                    if sg.val == v then value = v end
-                end
-                paint()
-            end
-            function api:Buttons() return segs end
-            function api:Holder() return holder end
-            return api
-        end
-
-        function s:Dropdown(props)
-            local row = self:row(props.Label)
-            local b = Instance.new("TextButton")
-            b.Size = UDim2.new(0, 120, 0, 26)
-            b.Position = UDim2.new(1, -132, 0.5, -13)
-            b.BackgroundColor3 = T.card2
-            b.BorderSizePixel = 0
-            b.Text = tostring(props.Default or (props.Options and props.Options[1]) or "")
-            b.TextColor3 = T.accent2
-            b.Font = FB
-            b.TextSize = 12
-            b.AutoButtonColor = false
-            b.Parent = row
-            corner(b, 5)
-            stroke(b, T.line, 1, 0.25)
-            local opts = props.Options or {}
-            local i = 1
-            for n, o in ipairs(opts) do if o == props.Default then i = n end end
-            b.MouseEnter:Connect(function() b.BackgroundColor3 = T.card3 end)
-            b.MouseLeave:Connect(function() b.BackgroundColor3 = T.card2 end)
-            b.MouseButton1Click:Connect(function()
-                i = i + 1
-                if i > #opts then i = 1 end
-                b.Text = tostring(opts[i])
-                if props.Callback then props.Callback(opts[i]) end
-            end)
-            local api = {}
-            function api:Get() return opts[i] end
-            function api:Set(val)
-                for n, o in ipairs(opts) do
-                    if o == val then i = n; b.Text = tostring(o) end
-                end
-            end
-
-
-
-            function api:Reload(novaLista)
-                opts = novaLista or {}
-                i = 1
-                b.Text = tostring(opts[1] or "none")
-            end
-
-            function api:Options() return opts end
-            return api
-        end
-        function s:Keybind(props)
-            local row = self:row(props.Label)
-            local b = Instance.new("TextButton")
-            b.Size = UDim2.new(0, 120, 0, 26)
-            b.Position = UDim2.new(1, -132, 0.5, -13)
-            b.BackgroundColor3 = T.card2
-            b.BorderSizePixel = 0
-            b.Text = props.Get and props.Get() or "none"
-            b.TextColor3 = T.accent
-            b.Font = FB
-            b.TextSize = 12
-            b.AutoButtonColor = false
-            b.Parent = row
-            corner(b, 5)
-            local ks = stroke(b, T.line, 1, 0.25)
-            local function paint()
-                if Keybind.capturing and Keybind.which == props.Which then
-                    b.Text = "press a key"
-                    b.TextColor3 = T.warn
-                    ks.Color = T.warn
-                    ks.Transparency = 0
+    -- ==========================================================
+    -- ABA AIM
+    -- ==========================================================
+    do
+        local pg = refs.paginas.AIM
+
+        local sLock = UIX.criar_secao(pg, 1, "Aimlock")
+        sLock:AddToggle("Aimlock enabled", "AimLockEnabled", nil,
+            "locks your aim onto the closest enemy")
+
+        --[[
+            ACTIVATION
+
+            "Activate with" diz ONDE a ativacao vem (tecla ou
+            mouse) e "Activation mode" diz COMO ela se comporta
+            (segura ou alterna). Sao coisas diferentes, entao
+            sao dois controles.
+
+            Trocar pra MOUSE ja escolhe o botao esquerdo, pra
+            nao ficar sem bind nenhum no meio do caminho -
+            antes isso deixava AimMouseButton nil e o botao
+            "Mouse button" nao fazia nada ate o usuario clicar.
+        --]]
+        sLock:AddOpcoesCampo("Activate with",
+            function()
+                return CONFIG.AimMouseButton and "MOUSE" or "KEY"
+            end,
+            function(v)
+                if v == "MOUSE" then
+                    CONFIG.AimMouseButton = CONFIG.AimMouseButton
+                                         or Enum.UserInputType.MouseButton1
                 else
-                    b.Text = props.Get and props.Get() or "none"
-                    b.TextColor3 = T.accent
-                    ks.Color = T.line
-                    ks.Transparency = 0.25
+                    CONFIG.AimMouseButton = nil
                 end
-            end
-            paint()
-            Keybind.painters[#Keybind.painters + 1] = paint
-            b.MouseEnter:Connect(function() b.BackgroundColor3 = T.line end)
-            b.MouseLeave:Connect(function() b.BackgroundColor3 = T.card2 end)
-            b.MouseButton1Click:Connect(function()
-                if props.OnStart then props.OnStart() end
-                Keybind.capturing = true
-                Keybind.which = props.Which
+                repaint_keybinds()
+            end,
+            {
+                { rotulo = "KEY",   valor = "KEY"   },
+                { rotulo = "MOUSE", valor = "MOUSE" },
+            })
+
+        sLock:AddKeybind("Aimlock key", "click and press any key", "key",
+            function()
+                if CONFIG.AimMouseButton then return "mouse in use" end
+                return key_name(CONFIG.AimKey)
+            end,
+            function()
+                CONFIG.AimMouseButton = nil
                 repaint_keybinds()
             end)
-            return { Paint = paint }
-        end
-        function s:Label(props)
-            props = props or {}
-            self._o = self._o + 1
-            local l = Instance.new("TextLabel")
-            l.Size = UDim2.new(1, -28, 0, props.Height or 32)
-            l.Position = UDim2.new(0, 14, 0, 0)
-            l.BackgroundTransparency = 1
-            l.Text = props.Text or ""
-            l.TextColor3 = props.Color or T.dim
-            l.Font = props.Mono and FM or F
-            l.TextSize = props.Size or 12
-            l.TextXAlignment = Enum.TextXAlignment.Left
-            l.TextYAlignment = Enum.TextYAlignment.Top
-            l.TextWrapped = true
-            l.LayoutOrder = self._o
-            l.Parent = self.inner
-            return l
-        end
-        function s:Divider()
-            self._o = self._o + 1
-            local d = Instance.new("Frame")
-            d.Size = UDim2.new(1, -24, 0, 1)
-            d.Position = UDim2.new(0, 12, 0, 0)
-            d.BackgroundColor3 = T.line
-            d.BorderSizePixel = 0
-            d.LayoutOrder = self._o
-            d.Parent = self.inner
-            return d
-        end
-        return s
-    end
 
-
-
-
-    local tAim = new_tab("AIM")
-
-    local sLock = new_section(tAim, "Aimlock")
-    sLock:Toggle{ Label = "Aimlock enabled", Default = CONFIG.AimLockEnabled,
-        Callback = function(v) CONFIG.AimLockEnabled = v end }
-
-
-
-
-    sLock:Segmented{ Label = "Activate with",
-        Options = { "KEY", "MOUSE" },
-        SegWidth = 62,
-        Default = CONFIG.AimMouseButton and "MOUSE" or "KEY",
-        Callback = function(v)
-            if v == "MOUSE" then
-
-                CONFIG.AimMouseButton = CONFIG.AimMouseButton
-                                     or Enum.UserInputType.MouseButton1
-            else
-                CONFIG.AimMouseButton = nil
-            end
-            repaint_keybinds()
-        end }
-
-    sLock:Keybind{ Label = "Aimlock key", Which = "key",
-        Get = function()
-            if CONFIG.AimMouseButton then return "mouse" end
-            return key_name(CONFIG.AimKey)
-        end,
-        OnStart = function()
-            CONFIG.AimMouseButton = nil
-            repaint_keybinds()
-        end }
-
-    sLock:Segmented{ Label = "Mouse button",
-        Options = { "LEFT", "RIGHT", "MIDDLE" },
-        SegWidth = 48,
-        Default = (CONFIG.AimMouseButton == Enum.UserInputType.MouseButton2 and "RIGHT")
-               or (CONFIG.AimMouseButton == Enum.UserInputType.MouseButton3 and "MIDDLE")
-               or (CONFIG.AimMouseButton == Enum.UserInputType.MouseButton1 and "LEFT")
-               or "LEFT",
-        Callback = function(v)
-            if v == "LEFT" then
-                CONFIG.AimMouseButton = Enum.UserInputType.MouseButton1
-            elseif v == "RIGHT" then
-                CONFIG.AimMouseButton = Enum.UserInputType.MouseButton2
-            else
-                CONFIG.AimMouseButton = Enum.UserInputType.MouseButton3
-            end
-            repaint_keybinds()
-        end }
-
-
-
-    sLock:Segmented{ Label = "Activation mode",
-        Options = { "HOLD", "TOGGLE" },
-        Default = CONFIG.AimHoldMode and "HOLD" or "TOGGLE",
-        Callback = function(v)
-            CONFIG.AimHoldMode = (v == "HOLD")
-            aim_toggled = false
-            recompute_aim_active()
-        end }
-
-
-    sLock:Segmented{ Label = "Target bone",
-        Options = { "HEAD", "CHEST", "ROOT" },
-        Default = (CONFIG.AimBone == "Head" and "HEAD")
-               or (CONFIG.AimBone == "UpperTorso" and "CHEST")
-               or (CONFIG.AimBone == "HumanoidRootPart" and "ROOT")
-               or (CONFIG.AimBone == "TribesHull" and "ROOT")
-               or "HEAD",
-        Callback = function(v)
-            CONFIG.AimBone = (v == "HEAD" and "Head")
-                          or (v == "CHEST" and "UpperTorso")
-                          or "HumanoidRootPart"
-        end }
-
-    sLock:Toggle{ Label = "Smooth entry", Default = CONFIG.AimSmoothLock,
-        Callback = function(v) CONFIG.AimSmoothLock = v end }
-
-
-
-
-
-
-    local sFire = new_section(tAim, "Auto-fire")
-    sFire:Toggle{ Label = "Auto-fire enabled", Default = CONFIG.AutoFire,
-        Callback = function(v) CONFIG.AutoFire = v end }
-    sFire:Toggle{ Label = "Fire on sight",
-        Default = CONFIG.FireOnSight,
-        Callback = function(v) CONFIG.FireOnSight = v end }
-    sFire:Toggle{ Label = "Wall check before firing",
-        Default = CONFIG.WallCheck,
-        Callback = function(v) CONFIG.WallCheck = v end }
-    sFire:Toggle{ Label = "Only when locked", Default = CONFIG.FireOnlyLocked,
-        Callback = function(v) CONFIG.FireOnlyLocked = v end }
-    sFire:Slider{ Label = "Fire cone", Default = CONFIG.FireCone,
-        Min = 0.5, Max = 20, Step = 0.5,
-        Format = function(v) return string.format("%.1f°", v) end,
-        Callback = function(v) CONFIG.FireCone = v end }
-    sFire:Slider{ Label = "Fire interval", Default = CONFIG.FireDelay,
-        Min = 0.02, Max = 0.6, Step = 0.02,
-        Format = function(v) return string.format("%.2fs", v) end,
-        Callback = function(v) CONFIG.FireDelay = v end }
-    sFire:Label{ Text = "  Without a locked target it fires at anyone\n" ..
-                       "  inside the cone with no wall in between.",
-                 Color = T.dim, Size = 11 }
-
-
-
-
-
-
-    local sMode = new_section(tAim, "Aim")
-    sMode:Segmented{ Label = "Behaviour",
-        Options = { "HUMAN", "ROBOT" },
-        SegWidth = 66,
-        Default = (CONFIG.AimMode == "robot") and "ROBOT" or "HUMAN",
-        Callback = function(v)
-            CONFIG.AimMode = (v == "ROBOT") and "robot" or "legit"
-            legit_reset()
-        end }
-
-    sMode:Slider{ Label = "Aim speed", Default = CONFIG.LegitSpeed,
-        Min = 15, Max = 900, Step = 5,
-        Format = function(v) return string.format("%.0f°/s", v) end,
-        Callback = function(v) CONFIG.LegitSpeed = v end }
-    sMode:Slider{ Label = "Hand shake", Default = CONFIG.LegitJitter,
-        Min = 0, Max = 2, Step = 0.05,
-        Format = function(v) return string.format("%.2f°", v) end,
-        Callback = function(v) CONFIG.LegitJitter = v end }
-    sMode:Slider{ Label = "Aim error", Default = CONFIG.LegitError,
-        Min = 0, Max = 6, Step = 0.1,
-        Format = function(v) return string.format("%.1f°", v) end,
-        Callback = function(v) CONFIG.LegitError = v end }
-    sMode:Slider{ Label = "Reaction time", Default = CONFIG.LegitReaction,
-        Min = 0, Max = 0.6, Step = 0.02,
-        Format = function(v) return string.format("%.2fs", v) end,
-        Callback = function(v) CONFIG.LegitReaction = v end }
-    sMode:Toggle{ Label = "Overshoot and come back",
-        Default = CONFIG.LegitOvershoot,
-        Callback = function(v) CONFIG.LegitOvershoot = v end }
-    sMode:Slider{ Label = "Keep tracking after loss", Default = CONFIG.LegitLostKeep,
-        Min = 0, Max = 1.5, Step = 0.05,
-        Format = function(v) return string.format("%.2fs", v) end,
-        Callback = function(v) CONFIG.LegitLostKeep = v end }
-
-
-    sMode:Divider()
-    sMode:Slider{ Label = "Field of view", Default = AIM_TUNE.FOVdeg,
-        Min = 30, Max = 180, Step = 15,
-        Format = function(v) return string.format("%d°", v) end,
-        Callback = function(v) AIM_TUNE.FOVdeg = v; AIM_TUNE.FOVdrop = v + 40 end }
-    sMode:Slider{ Label = "Aim height", Default = CONFIG.AimHeightOffset,
-        Min = -2, Max = 4, Step = 0.25,
-        Callback = function(v) CONFIG.AimHeightOffset = v end }
-    sMode:Slider{ Label = "Prediction", Default = AIM_TUNE.Prediction,
-        Min = 0, Max = 0.30, Step = 0.02,
-        Format = function(v) return string.format("%.2fs", v) end,
-        Callback = function(v) AIM_TUNE.Prediction = v end }
-    sMode:Slider{ Label = "Max range", Default = CONFIG.AimMaxDist,
-        Min = 100, Max = 3000, Step = 100,
-        Format = function(v) return string.format("%dm", v) end,
-        Callback = function(v) CONFIG.AimMaxDist = v end }
-    sMode:Slider{ Label = "Distance weight", Default = AIM_TUNE.DistWeight,
-        Min = 0, Max = 0.75, Step = 0.05,
-        Callback = function(v) AIM_TUNE.DistWeight = v end }
-    sMode:Toggle{ Label = "FOV circle", Default = CONFIG.ShowFOVCircle,
-        Callback = function(v) CONFIG.ShowFOVCircle = v end }
-
-
-
-
-    local tVis = new_tab("VISUAL")
-
-
-
-
-
-
-
-    local sEsp = new_section(tVis, "ESP")
-    sEsp:Toggle{ Label = "ESP enabled", Default = CONFIG.ESPEnabled,
-        Callback = function(v) CONFIG.ESPEnabled = v end }
-    sEsp:Toggle{ Label = "Show name", Default = CONFIG.ESPShowName,
-        Callback = function(v) CONFIG.ESPShowName = v end }
-    sEsp:Toggle{ Label = "Show health", Default = CONFIG.ESPShowHealth,
-        Callback = function(v) CONFIG.ESPShowHealth = v end }
-    sEsp:Toggle{ Label = "Show distance", Default = CONFIG.ESPShowDist,
-        Callback = function(v) CONFIG.ESPShowDist = v end }
-    sEsp:Slider{ Label = "ESP range", Default = CONFIG.ESPMaxDistance,
-        Min = 50, Max = 2000, Step = 50,
-        Format = function(v) return string.format("%dm", v) end,
-        Callback = function(v) CONFIG.ESPMaxDistance = v end }
-
-    sEsp:Divider()
-
-    local enemyColor = CONFIG.ESPColorEnemy
-    local allyColor  = CONFIG.ESPColorAlly
-    local PALETTE = {
-        {name="Red",     c=Color3.fromRGB(255,72,72)},
-        {name="Orange",  c=Color3.fromRGB(255,150,60)},
-        {name="Yellow",  c=Color3.fromRGB(255,220,70)},
-        {name="Green",   c=Color3.fromRGB(90,220,120)},
-        {name="Cyan",    c=Color3.fromRGB(72,196,255)},
-        {name="Purple",  c=Color3.fromRGB(170,110,255)},
-        {name="Pink",    c=Color3.fromRGB(255,110,190)},
-        {name="White",   c=Color3.fromRGB(240,240,240)},
-    }
-    local function palette_names()
-        local o = {}
-        for i, p in ipairs(PALETTE) do o[i] = p.name end
-        return o
-    end
-    local enemyIdx, allyIdx = 1, 5
-
-    sEsp:Dropdown{ Label = "Enemy colour",
-        Options = palette_names(),
-        Default = "Red",
-        Callback = function(nome)
-            for i, p in ipairs(PALETTE) do
-                if p.name == nome then enemyIdx = i; enemyColor = p.c end
-            end
-            CONFIG.ESPColorEnemy = enemyColor
-        end }
-    sEsp:Dropdown{ Label = "Ally colour",
-        Options = palette_names(),
-        Default = "Cyan",
-        Callback = function(nome)
-            for i, p in ipairs(PALETTE) do
-                if p.name == nome then allyIdx = i; allyColor = p.c end
-            end
-            CONFIG.ESPColorAlly = allyColor
-        end }
-
-
-
-
-    local tMov = new_tab("MOVEMENT")
-
-    local sFly = new_section(tMov, "Fly")
-    sFly:Toggle{ Label = "Fly enabled", Default = CONFIG.FlyEnabled,
-        Callback = function(v)
-            CONFIG.FlyEnabled = v
-            if v then start_fly() else stop_fly() end
-        end }
-    sFly:Slider{ Label = "Fly speed", Default = CONFIG.FlySpeed,
-        Min = 10, Max = 200, Step = 5,
-        Format = function(v) return string.format("%d", v) end,
-        Callback = function(v)
-            CONFIG.FlySpeed = v
-            if fly_vel then fly_vel.Velocity = Vector3.zero end
-        end }
-    sFly:Divider()
-    sFly:Label{ Text = "  WASD to move  ·  Space up  ·  Ctrl down",
-                Color = T.dim, Size = 11 }
-
-
-
-
-
-
-
-
-
-
-    local tPerf = new_tab("FPS")
-
-    local perf_orig = {}
-    local fps_on    = false
-
-
-    local function guardar(chave, valor)
-        if perf_orig[chave] == nil then perf_orig[chave] = valor end
-    end
-
-    local POST_FX = {
-        BloomEffect = true, BlurEffect = true, SunRaysEffect = true,
-        ColorCorrectionEffect = true, DepthOfFieldEffect = true,
-        Atmosphere = true,
-    }
-
-    local function ligar_fps()
-        pcall(function()
-            local L = game:GetService("Lighting")
-            guardar("GlobalShadows", L.GlobalShadows)
-            L.GlobalShadows = false
-            guardar("Quality", L.QualityLevel)
-            L.QualityLevel = 1
-            guardar("FogEnd", L.FogEnd)
-            L.FogEnd = 100000
-            for _, c in ipairs(L:GetChildren()) do
-                if POST_FX[c.ClassName] and c:IsA("PostEffect") then
-                    guardar("fx_" .. c.Name, c.Enabled)
-                    c.Enabled = false
-                end
-            end
-        end)
-        pcall(function()
-            local T2 = Workspace:FindFirstChildOfClass("Terrain")
-            if T2 then
-                guardar("Terrain", T2.Transparency)
-                T2.Transparency = 1
-            end
-        end)
-        pcall(function()
-            for _, d in ipairs(Workspace:GetDescendants()) do
-                if d:IsA("ParticleEmitter") or d:IsA("Trail")
-                   or d:IsA("Smoke") or d:IsA("Fire")
-                   or d:IsA("Sparkles") then
-                    d.Enabled = false
-                end
-            end
-        end)
-        fps_on = true
-    end
-
-    local function desligar_fps()
-        pcall(function()
-            local L = game:GetService("Lighting")
-            if perf_orig.GlobalShadows ~= nil then
-                L.GlobalShadows = perf_orig.GlobalShadows
-            end
-            if perf_orig.Quality ~= nil then
-                L.QualityLevel = perf_orig.Quality
-            end
-            if perf_orig.FogEnd ~= nil then L.FogEnd = perf_orig.FogEnd end
-            for _, c in ipairs(L:GetChildren()) do
-                local o = perf_orig["fx_" .. c.Name]
-                if o ~= nil then c.Enabled = o end
-            end
-        end)
-        pcall(function()
-            local T2 = Workspace:FindFirstChildOfClass("Terrain")
-            if T2 and perf_orig.Terrain ~= nil then
-                T2.Transparency = perf_orig.Terrain
-            end
-        end)
-        fps_on = false
-    end
-
-
-
-    local sFps = new_section(tPerf, "Performance")
-
-    local btnFps = Instance.new("TextButton")
-    btnFps.Name = "PerformanceToggle"
-    btnFps.Size = UDim2.new(1, -24, 0, 52)
-    btnFps.Position = UDim2.new(0, 12, 0, 0)
-    btnFps.BackgroundColor3 = T.off
-    btnFps.BorderSizePixel = 0
-    btnFps.Text = ""
-    btnFps.AutoButtonColor = false
-    btnFps.LayoutOrder = 1
-    btnFps.Parent = sFps.inner
-    corner(btnFps, 10)
-
-
-    local dotFps = Instance.new("Frame")
-    dotFps.Name = "Dot"
-    dotFps.Size = UDim2.new(0, 8, 0, 8)
-    dotFps.Position = UDim2.new(0, 18, 0.5, -4)
-    dotFps.BackgroundColor3 = T.dim
-    dotFps.BorderSizePixel = 0
-    dotFps.Parent = btnFps
-    corner(dotFps, 4)
-
-    local lblFps = Instance.new("TextLabel")
-    lblFps.Name = "Title"
-    lblFps.Size = UDim2.new(1, -70, 1, 0)
-    lblFps.Position = UDim2.new(0, 36, 0, 0)
-    lblFps.BackgroundTransparency = 1
-    lblFps.Text = "PERFORMANCE MODE"
-    lblFps.TextColor3 = T.text
-    lblFps.Font = FB
-    lblFps.TextSize = 12
-    lblFps.TextXAlignment = Enum.TextXAlignment.Left
-    lblFps.Parent = btnFps
-
-
-    local chevFps = Instance.new("TextLabel")
-    chevFps.Name = "Chevron"
-    chevFps.Size = UDim2.new(0, 24, 1, 0)
-    chevFps.Position = UDim2.new(1, -34, 0, 0)
-    chevFps.BackgroundTransparency = 1
-    chevFps.Text = "ON"
-    chevFps.TextColor3 = T.faint
-    chevFps.Font = FB
-    chevFps.TextSize = 10
-    chevFps.Parent = btnFps
-
-
-
-    local strokeFps = stroke(btnFps, T.line, 1, 0.5)
-
-    local function pintar_fps()
-        if fps_on then
-            btnFps.BackgroundColor3 = T.accentD
-            dotFps.BackgroundColor3 = T.good
-            lblFps.TextColor3     = T.accent2
-            chevFps.Text          = "ON"
-            chevFps.TextColor3    = T.good
-            strokeFps.Color        = T.accent
-            strokeFps.Transparency = 0.35
-        else
-            btnFps.BackgroundColor3 = T.off
-            dotFps.BackgroundColor3 = T.dim
-            lblFps.TextColor3       = T.text
-            chevFps.Text            = "OFF"
-            chevFps.TextColor3      = T.faint
-            strokeFps.Color        = T.line
-            strokeFps.Transparency = 0.5
-        end
-    end
-    pintar_fps()
-
-    btnFps.MouseButton1Click:Connect(function()
-        if fps_on then
-            desligar_fps()
-        else
-            ligar_fps()
-        end
-        pintar_fps()
-    end)
-
-
-
-
-
-
-
-
-
-
-
-    local tCfg = new_tab("CONFIG")
-
-    carregar_presets_do_disco()
-
-
-
-    local pintar_auto
-
-    local presetAtual  = nil
-    local nomeDigitado = ""
-
-
-
-    local auto_load_on = (autoload_nome ~= nil)
-
-
-
-
-    local sPre = new_section(tCfg, "Preset")
-
-    local listaFrame = Instance.new("Frame")
-    listaFrame.Name = "PresetList"
-    listaFrame.Size = UDim2.new(1, -24, 0, 0)
-    listaFrame.Position = UDim2.new(0, 12, 0, 0)
-    listaFrame.BackgroundTransparency = 1
-    listaFrame.AutomaticSize = Enum.AutomaticSize.Y
-    listaFrame.LayoutOrder = 1
-    listaFrame.Parent = sPre.inner
-
-    local listaLayout = Instance.new("UIListLayout")
-    listaLayout.Padding = UDim.new(0, 6)
-    listaLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listaLayout.Parent = listaFrame
-
-
-
-    local function montar_linha(nome, indice)
-        local ehAuto = (autoload_nome == nome)
-        local sel    = (presetAtual == nome)
-
-        local card = Instance.new("Frame")
-        card.Name = "P_" .. nome
-        card.Size = UDim2.new(1, 0, 0, 38)
-        card.BackgroundColor3 = sel and T.card3 or T.card2
-        card.BorderSizePixel = 0
-        card.LayoutOrder = indice
-        card.Parent = listaFrame
-        corner(card, 8)
-
-
-
-        local rail = Instance.new("Frame")
-        rail.Name = "Rail"
-        rail.Size = UDim2.new(0, 3, 1, -14)
-        rail.Position = UDim2.new(0, 0, 0, 7)
-        rail.BackgroundColor3 = ehAuto and T.accent or T.line
-        rail.BorderSizePixel = 0
-        rail.Parent = card
-        corner(rail, 2)
-
-        local nomeLbl = Instance.new("TextLabel")
-        nomeLbl.Name = "Name"
-        nomeLbl.Size = UDim2.new(1, -142, 1, 0)
-        nomeLbl.Position = UDim2.new(0, 16, 0, 0)
-        nomeLbl.BackgroundTransparency = 1
-        nomeLbl.Text = nome
-        nomeLbl.TextColor3 = sel and T.accent2 or T.text
-        nomeLbl.Font = FB
-        nomeLbl.TextSize = 12
-        nomeLbl.TextXAlignment = Enum.TextXAlignment.Left
-        nomeLbl.TextTruncate = Enum.TextTruncate.AtEnd
-        nomeLbl.Parent = card
-
-
-        if ehAuto then
-            local pill = Instance.new("Frame")
-            pill.Name = "Pill"
-            pill.Size = UDim2.new(0, 34, 0, 14)
-            pill.Position = UDim2.new(1, -142, 0.5, -7)
-            pill.BackgroundColor3 = T.accentD
-            pill.BorderSizePixel = 0
-            pill.Parent = card
-            corner(pill, 7)
-            local pt = Instance.new("TextLabel")
-            pt.Size = UDim2.new(1, 0, 1, 0)
-            pt.BackgroundTransparency = 1
-            pt.Text = "AUTO"
-            pt.TextColor3 = T.accent2
-            pt.Font = FB
-            pt.TextSize = 8
-            pt.Parent = pill
-        end
-
-        local function acao(texto, x, cor, ligado, fn)
-            local b = Instance.new("TextButton")
-            b.Size = UDim2.new(0, 30, 0, 24)
-            b.Position = UDim2.new(1, x, 0.5, -12)
-            b.BackgroundColor3 = ligado and T.accentD or T.off
-            b.BorderSizePixel = 0
-            b.Text = texto
-            b.TextColor3 = ligado and T.accent2 or T.dim
-            b.Font = FB
-            b.TextSize = 13
-            b.AutoButtonColor = false
-            b.Parent = card
-            corner(b, 6)
-            if ligado then stroke(b, T.accent, 1, 0.4) end
-            b.MouseButton1Click:Connect(fn)
-            return b
-        end
-
-
-        acao(">", -72, T.accent2, false, function()
-            local n = aplicar_config(presets[nome])
-            presetAtual = nome
-            redesenhar_lista()
-            avisar("'" .. nome .. "' loaded (" .. n .. ")")
-        end)
-
-
-        local pin = acao("*", -38, T.good, ehAuto, function()
-            if autoload_nome == nome then
-                gravar_autoload(nil)
-                auto_load_on = false
-                avisar("Auto-load off")
-            else
-                gravar_autoload(nome)
-                auto_load_on = true
-                avisar("'" .. nome .. "' loads on inject")
-            end
-            redesenhar_lista()
-            if pintar_auto then pintar_auto() end
-        end)
-        pin.Name = "Pin"
-    end
-
-
-    local redesenhar_lista = nil
-    redesenhar_lista = function()
-        for _, c in ipairs(listaFrame:GetChildren()) do
-            if c:IsA("GuiObject") then c:Destroy() end
-        end
-
-        if #preset_names == 0 then
-            local vazio = Instance.new("Frame")
-            vazio.Name = "Empty"
-            vazio.Size = UDim2.new(1, 0, 0, 46)
-            vazio.BackgroundColor3 = T.off
-            vazio.BorderSizePixel = 0
-            vazio.LayoutOrder = 1
-            vazio.Parent = listaFrame
-            corner(vazio, 8)
-
-            local t1 = Instance.new("TextLabel")
-            t1.Size = UDim2.new(1, -24, 0, 18)
-            t1.Position = UDim2.new(0, 14, 0, 8)
-            t1.BackgroundTransparency = 1
-            t1.Text = "No presets saved"
-            t1.TextColor3 = T.dim
-            t1.Font = FB
-            t1.TextSize = 12
-            t1.TextXAlignment = Enum.TextXAlignment.Left
-            t1.Parent = vazio
-
-            local t2 = Instance.new("TextLabel")
-            t2.Size = UDim2.new(1, -24, 0, 16)
-            t2.Position = UDim2.new(0, 14, 0, 25)
-            t2.BackgroundTransparency = 1
-            t2.Text = "Create one below."
-            t2.TextColor3 = T.faint
-            t2.Font = F
-            t2.TextSize = 11
-            t2.TextXAlignment = Enum.TextXAlignment.Left
-            t2.Parent = vazio
-            return
-        end
-
-        for i, nome in ipairs(preset_names) do
-            montar_linha(nome, i)
-        end
-    end
-
-
-    sPre:Divider()
-    sPre:Input{ Label = "Name", Placeholder = "e.g. strong aimbot",
-        OnChange = function(txt) nomeDigitado = txt end }
-
-    local function nome_limpo()
-        return tostring(nomeDigitado or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    end
-
-    sPre:Dual{ Width = 190,
-        { Label = "SAVE", Color = T.good, Callback = function()
-            local nome = nome_limpo()
-            if #nome == 0 then
-                avisar("Type a name first")
-                return
-            end
-            if #nome > 20 then
-                avisar("Name too long (max 20)")
-                return
-            end
-            local jaTinha = presets[nome] ~= nil
-            presets[nome] = capturar_config()
-            if not jaTinha then
-                preset_names[#preset_names + 1] = nome
-            end
-            salvar_presets_em_disco()
-            presetAtual = nome
-            redesenhar_lista()
-            avisar(jaTinha and ("'" .. nome .. "' updated")
-                           or ("'" .. nome .. "' saved"))
-        end },
-        { Label = "OVERWRITE", Color = T.accent, Callback = function()
-            local nome = presetAtual or preset_names[1]
-            if not nome or not presets[nome] then
-                avisar("No preset selected")
-                return
-            end
-            presets[nome] = capturar_config()
-            salvar_presets_em_disco()
-            redesenhar_lista()
-            avisar("'" .. nome .. "' overwritten")
-        end },
-    }
-
-    sPre:Dual{ Width = 190,
-        { Label = "DELETE", Color = T.bad, Callback = function()
-            local nome = nome_limpo()
-            if #nome == 0 then nome = presetAtual or "" end
-            if #nome == 0 or not presets[nome] then
-                avisar("No preset named '" .. nome .. "'")
-                return
-            end
-            apagar_preset(nome)
-            if autoload_nome == nome then
-                gravar_autoload(nil)
-                auto_load_on = false
-            end
-            if presetAtual == nome then presetAtual = preset_names[1] end
-            redesenhar_lista()
-            avisar("'" .. nome .. "' deleted")
-        end },
-        { Label = "RESET ALL", Color = T.warn, Callback = function()
-            local base = {
-                AimMode = "robot", LegitSpeed = 90, LegitJitter = 0.55,
-                LegitError = 1.8, LegitReaction = 0.18,
-                LegitOvershoot = true, LegitLostKeep = 0.4,
-                FireOnlyLocked = false, FireOnSight = true, WallCheck = true,
-                AutoFire = false, FireCone = 2.5, FireDelay = 0.10,
-                ESPEnabled = true, ESPMaxDistance = 500,
-                ESPShowName = true, ESPShowHealth = true, ESPShowDist = true,
-                FlyEnabled = false, FlySpeed = 55, MatchOnly = true,
-                HookCamera = true, ShowFOVCircle = true,
-                AIM_FOVdeg = 100, AIM_Prediction = 0.08,
-                AIM_DistWeight = 0.25,
-            }
-            local txt = {}
-            for k, v in pairs(base) do txt[k] = valor_para_texto(v) end
-            aplicar_config(txt)
-
-
-            gravar_autoload(nil)
-            auto_load_on = false
-            desativar_auto_exec()
-            redesenhar_lista()
-            avisar("Defaults restored")
-        end },
-    }
-
-
-
-
-
-
-    sPre:Divider()
-
-
-
-    local autoLbl = Instance.new("TextLabel")
-    autoLbl.Name = "AutoStatus"
-    autoLbl.Size = UDim2.new(1, -24, 0, 16)
-    autoLbl.Position = UDim2.new(0, 12, 0, 0)
-    autoLbl.BackgroundTransparency = 1
-    autoLbl.TextColor3 = T.dim
-    autoLbl.Font = FM
-    autoLbl.TextSize = 11
-    autoLbl.TextXAlignment = Enum.TextXAlignment.Left
-    autoLbl.LayoutOrder = 4
-    autoLbl.Parent = sPre.inner
-
-    function pintar_auto()
-        if not FS.tem then
-            autoLbl.Text = "unavailable - no writefile"
-            autoLbl.TextColor3 = T.bad
-        elseif autoload_nome then
-            autoLbl.Text = "on inject  ->  " .. autoload_nome
-            autoLbl.TextColor3 = T.good
-        else
-            autoLbl.Text = "nothing loads on inject"
-            autoLbl.TextColor3 = T.faint
-        end
-    end
-
-    sPre:Toggle{ Label = "Load a preset on inject",
-        Default = auto_load_on,
-        Callback = function(v)
-            if v then
-                local alvo = presetAtual or preset_names[1]
-                if not alvo then
-                    avisar("Save a preset first")
-
-                    return false
-                end
-                gravar_autoload(alvo)
-                avisar("'" .. alvo .. "' loads on inject")
-            else
-                gravar_autoload(nil)
-                avisar("Auto-load off")
-            end
-            redesenhar_lista()
-            pintar_auto()
-        end }
-    pintar_auto()
-
-
-
-    sPre:Toggle{ Label = "Reopen hub on next load",
-        Default = (hub_url ~= nil),
-        Callback = function(v)
-            if v then
-                local ok2, motivo = ativar_auto_exec(HUB_URL)
-                if ok2 then
-                    avisar("Hub will reopen on next load")
+        sLock:AddOpcoesCampo("Mouse button",
+            function()
+                local mb = CONFIG.AimMouseButton
+                if mb == Enum.UserInputType.MouseButton2 then return "RIGHT" end
+                if mb == Enum.UserInputType.MouseButton3 then return "MIDDLE" end
+                if mb == Enum.UserInputType.MouseButton1 then return "LEFT" end
+                return nil
+            end,
+            function(v)
+                if v == "LEFT" then
+                    CONFIG.AimMouseButton = Enum.UserInputType.MouseButton1
+                elseif v == "RIGHT" then
+                    CONFIG.AimMouseButton = Enum.UserInputType.MouseButton2
                 else
-                    avisar(tostring(motivo))
-                    return false
+                    CONFIG.AimMouseButton = Enum.UserInputType.MouseButton3
                 end
-            else
-                desativar_auto_exec()
-                avisar("Auto-exec off")
+                repaint_keybinds()
+            end,
+            {
+                { rotulo = "LEFT",   valor = "LEFT"   },
+                { rotulo = "RIGHT",  valor = "RIGHT"  },
+                { rotulo = "MIDDLE", valor = "MIDDLE" },
+            })
+
+        sLock:AddOpcoes("Activation mode", "AimHoldMode", {
+            { rotulo = "HOLD",   valor = true  },
+            { rotulo = "TOGGLE", valor = false },
+        })
+        refs.toggles.AimHoldMode = function()
+            local b = refs.abas and nil
+            for _, p in pairs(refs.toggles) do end
+        end
+
+        sLock:AddOpcoesCampo("Target bone",
+            function()
+                local b = CONFIG.AimBone
+                if b == "Head" then return "HEAD" end
+                if b == "UpperTorso" then return "CHEST" end
+                if b == "HumanoidRootPart" or b == "TribesHull" then
+                    return "ROOT"
+                end
+                return "HEAD"
+            end,
+            function(v)
+                if v == "HEAD" then
+                    CONFIG.AimBone = "Head"
+                elseif v == "CHEST" then
+                    CONFIG.AimBone = "UpperTorso"
+                else
+                    CONFIG.AimBone = "HumanoidRootPart"
+                end
+            end,
+            {
+                { rotulo = "HEAD",  valor = "HEAD"  },
+                { rotulo = "CHEST", valor = "CHEST" },
+                { rotulo = "ROOT",  valor = "ROOT"  },
+            })
+
+        sLock:AddToggle("Smooth entry", "AimSmoothLock", nil,
+            "eases the crosshair in instead of snapping")
+
+        local sMode = UIX.criar_secao(pg, 2, "Aim behaviour")
+
+        sMode:AddOpcoesCampo("Behaviour",
+            function()
+                return (CONFIG.AimMode == "robot") and "ROBOT" or "HUMAN"
+            end,
+            function(v)
+                CONFIG.AimMode = (v == "ROBOT") and "robot" or "legit"
+                pcall(legit_reset)
+            end,
+            {
+                { rotulo = "HUMAN", valor = "HUMAN" },
+                { rotulo = "ROBOT", valor = "ROBOT" },
+            })
+
+        sMode:AddSlider("Aim speed", "LegitSpeed", 15, 900, 5,
+            function(v) return string.format("%.0f deg/s", v) end)
+        sMode:AddSlider("Hand shake", "LegitJitter", 0, 2, 0.05,
+            function(v) return string.format("%.2f deg", v) end)
+        sMode:AddSlider("Aim error", "LegitError", 0, 6, 0.1,
+            function(v) return string.format("%.1f deg", v) end)
+        sMode:AddSlider("Reaction time", "LegitReaction", 0, 0.6, 0.02,
+            function(v) return string.format("%.2fs", v) end)
+        sMode:AddToggle("Overshoot and come back", "LegitOvershoot")
+        sMode:AddSlider("Keep tracking after loss", "LegitLostKeep",
+            0, 1.5, 0.05,
+            function(v) return string.format("%.2fs", v) end)
+
+        local sTune = UIX.criar_secao(pg, 3, "Aim tuning")
+        sTune:AddSlider("Field of view", "AIM_FOVdeg", 30, 180, 15,
+            function(v) return string.format("%d deg", v) end)
+        sTune:AddSlider("Aim height", "AimHeightOffset", -2, 4, 0.25,
+            function(v) return string.format("%.2f", v) end)
+        sTune:AddSlider("Prediction", "AIM_Prediction", 0, 0.30, 0.02,
+            function(v) return string.format("%.2fs", v) end)
+        sTune:AddSlider("Max range", "AimMaxDist", 100, 3000, 100,
+            function(v) return string.format("%dm", v) end)
+        sTune:AddSlider("Distance weight", "AIM_DistWeight", 0, 0.75, 0.05,
+            function(v) return string.format("%.2f", v) end)
+        sTune:AddToggle("FOV circle", "ShowFOVCircle", nil,
+            "shows the aim range on screen")
+
+        local sFire = UIX.criar_secao(pg, 4, "Auto-fire")
+        sFire:AddToggle("Auto-fire enabled", "AutoFire", nil,
+            "fires by itself once a target is locked")
+        sFire:AddToggle("Fire on sight", "FireOnSight", nil,
+            "also fires when a target walks into the cone")
+        sFire:AddToggle("Wall check before firing", "WallCheck", nil,
+            "wont fire at enemies behind walls")
+        sFire:AddToggle("Only when locked", "FireOnlyLocked", nil)
+        sFire:AddSlider("Fire cone", "FireCone", 0.5, 20, 0.5,
+            function(v) return string.format("%.1f deg", v) end)
+        sFire:AddSlider("Fire interval", "FireDelay", 0.02, 0.6, 0.02,
+            function(v) return string.format("%.2fs", v) end)
+        sFire:AddLabel(
+            "  Without a locked target it fires at anyone inside " ..
+            "the cone with no wall in between.")
+
+        refs.secoes_aim = { sLock, sMode, sTune, sFire }
+    end
+
+    -- ==========================================================
+    -- ABA VISUAL
+    -- ==========================================================
+    do
+        local pg = refs.paginas.VISUAL
+
+        local PALETTE = {
+            { name = "Red",    c = Color3.fromRGB(255, 72, 72)   },
+            { name = "Orange", c = Color3.fromRGB(255, 150, 60)  },
+            { name = "Yellow", c = Color3.fromRGB(255, 220, 70)  },
+            { name = "Green",  c = Color3.fromRGB(90, 220, 120)  },
+            { name = "Cyan",   c = Color3.fromRGB(72, 196, 255)  },
+            { name = "Purple", c = Color3.fromRGB(170, 110, 255) },
+            { name = "Pink",   c = Color3.fromRGB(255, 110, 190) },
+            { name = "White",  c = Color3.fromRGB(240, 240, 240) },
+        }
+
+        local function nome_da_cor(c)
+            for _, p in ipairs(PALETTE) do
+                if p.c == c then return p.name end
             end
-        end }
+            return "Red"
+        end
+        local function cor_do_nome(nome)
+            for _, p in ipairs(PALETTE) do
+                if p.name == nome then return p.c end
+            end
+            return nil
+        end
 
+        local sEsp = UIX.criar_secao(pg, 1, "ESP")
+        sEsp:AddToggle("ESP enabled", "ESPEnabled", nil,
+            "shows enemies through walls")
+        sEsp:AddToggle("Show name", "ESPShowName")
+        sEsp:AddToggle("Show health", "ESPShowHealth")
+        sEsp:AddToggle("Show distance", "ESPShowDist")
+        sEsp:AddSlider("ESP range", "ESPMaxDistance", 50, 2000, 50,
+            function(v) return string.format("%dm", v) end)
 
+        local sCor = UIX.criar_secao(pg, 2, "Colours")
+        local optsCor = {}
+        for _, p in ipairs(PALETTE) do
+            optsCor[#optsCor + 1] = { rotulo = p.name, valor = p.name }
+        end
 
+        sCor:AddOpcoesCampo("Enemy colour",
+            function() return nome_da_cor(CONFIG.ESPColorEnemy) end,
+            function(v)
+                local c = cor_do_nome(v)
+                if c then CONFIG.ESPColorEnemy = c end
+            end,
+            optsCor)
 
+        sCor:AddOpcoesCampo("Ally colour",
+            function() return nome_da_cor(CONFIG.ESPColorAlly) end,
+            function(v)
+                local c = cor_do_nome(v)
+                if c then CONFIG.ESPColorAlly = c end
+            end,
+            optsCor)
+
+        sCor:AddLabel(
+            "  Enemy and ally colours only apply to teammates " ..
+            "and opponents - the ESP still only draws players.")
+    end
+
+    -- ==========================================================
+    -- ABA MOVEMENT
+    -- ==========================================================
+    do
+        local pg = refs.paginas.MOVEMENT
+
+        local sFly = UIX.criar_secao(pg, 1, "Flight")
+        sFly:AddToggle("Fly enabled", "FlyEnabled",
+            function(on)
+                if on then pcall(start_fly) else pcall(stop_fly) end
+            end,
+            "WASD to move, Space up, Ctrl down")
+        sFly:AddSlider("Fly speed", "FlySpeed", 10, 200, 5,
+            function(v)
+                if fly_vel then fly_vel.VectorVelocity = Vector3.zero end
+                return string.format("%d", v)
+            end)
+
+        local sSpeed = UIX.criar_secao(pg, 2, "Speed")
+        sSpeed:AddToggle("Speed enabled", "SpeedEnabled", nil,
+            "changes your walk speed")
+        sSpeed:AddSlider("Walk speed", "SpeedValue", 16, 200, 1,
+            function(v)
+                pcall(apply_speed)
+                return string.format("%d", v)
+            end)
+        sSpeed:AddLabel(
+            "  Restores your normal walk speed the moment you " ..
+            "turn this off.")
+    end
+
+    -- ==========================================================
+    -- ABA FPS
+    -- ==========================================================
+    do
+        local pg = refs.paginas.FPS
+
+        local perf_orig = {}
+        local fps_on    = false
+
+        local function guardar(chave, valor)
+            if perf_orig[chave] == nil then perf_orig[chave] = valor end
+        end
+
+        local POST_FX = {
+            BloomEffect = true, BlurEffect = true, SunRaysEffect = true,
+            ColorCorrectionEffect = true, DepthOfFieldEffect = true,
+            Atmosphere = true,
+        }
+
+        local function ligar_fps()
+            pcall(function()
+                local L = game:GetService("Lighting")
+                guardar("GlobalShadows", L.GlobalShadows)
+                L.GlobalShadows = false
+                guardar("Quality", L.QualityLevel)
+                L.QualityLevel = 1
+                guardar("FogEnd", L.FogEnd)
+                L.FogEnd = 100000
+                for _, c in ipairs(L:GetChildren()) do
+                    if POST_FX[c.ClassName] and c:IsA("PostEffect") then
+                        guardar("fx_" .. c.Name, c.Enabled)
+                        c.Enabled = false
+                    end
+                end
+            end)
+            pcall(function()
+                local ter = Workspace:FindFirstChildOfClass("Terrain")
+                if ter then
+                    guardar("Terrain", ter.Transparency)
+                    ter.Transparency = 1
+                end
+            end)
+            pcall(function()
+                for _, d in ipairs(Workspace:GetDescendants()) do
+                    if d:IsA("ParticleEmitter") or d:IsA("Trail")
+                       or d:IsA("Smoke") or d:IsA("Fire")
+                       or d:IsA("Sparkles") then
+                        d.Enabled = false
+                    end
+                end
+            end)
+            fps_on = true
+        end
+
+        local function desligar_fps()
+            pcall(function()
+                local L = game:GetService("Lighting")
+                if perf_orig.GlobalShadows ~= nil then
+                    L.GlobalShadows = perf_orig.GlobalShadows
+                end
+                if perf_orig.Quality ~= nil then
+                    L.QualityLevel = perf_orig.Quality
+                end
+                if perf_orig.FogEnd ~= nil then L.FogEnd = perf_orig.FogEnd end
+                for _, c in ipairs(L:GetChildren()) do
+                    local o = perf_orig["fx_" .. c.Name]
+                    if o ~= nil then c.Enabled = o end
+                end
+            end)
+            pcall(function()
+                local ter = Workspace:FindFirstChildOfClass("Terrain")
+                if ter and perf_orig.Terrain ~= nil then
+                    ter.Transparency = perf_orig.Terrain
+                end
+            end)
+            fps_on = false
+        end
+
+        local sFps = UIX.criar_secao(pg, 1, "Performance mode")
+
+        --[[
+            Antes isto era um cartao de 52px feito a mao, com
+            bolinha, titulo e "ON/OFF" no canto. Virou um toggle
+            de verdade dentro da abinha: mesma logica, uma linha
+            de codigo e a mesma cara dos outros controles.
+        --]]
+        sFps:AddToggle("Performance mode", "FpsMode",
+            function(on)
+                if on then ligar_fps() else desligar_fps() end
+            end,
+            "turns off shadows, effects and fog")
+
+        sFps:AddLabel(
+            "  Restores your original lighting the moment you " ..
+            "turn it off - nothing is left changed.")
+
+        -- exposto pro limpar_tudo fechar o modo ao sair
+        refs.fps = { ligar = ligar_fps, desligar = desligar_fps,
+                     ativo = function() return fps_on end }
+    end
+
+    -- ==========================================================
+    -- ABA CONFIG
+    -- ==========================================================
+    do
+        local pg = refs.paginas.CONFIG
+
+        carregar_presets_do_disco()
+
+        local pintar_auto
+        local presetAtual  = nil
+        local nomeDigitado = ""
+        local listaFrame, redesenhar_lista
+
+        -- ------------------------------------------------------
+        -- PRESETS PRONTOS
+        -- ------------------------------------------------------
+        local sPre = UIX.criar_secao(pg, 1, "Presets")
+
+        for i, p in ipairs(PRESETS) do
+            UIX.montar_preset_pronto(sPre.inner, i + 1, p, function(pr)
+                local n = aplicar_preset(pr)
+                presetAtual = nil
+                if redesenhar_lista then redesenhar_lista() end
+                avisar(pr.nome .. " loaded (" .. tostring(n) .. ")")
+            end)
+        end
+
+        sPre:AddLabel(
+            "  A ready preset overwrites your settings. Nothing " ..
+            "is written to disk until you save it below.")
+
+        -- ------------------------------------------------------
+        -- MEUS PRESETS
+        --
+        -- Formato do arquivo MANTIDO igual ao que ja existia:
+        --
+        --     [preset]nome do preset
+        --     chave=valor
+        --     chave=valor
+        --
+        -- Um bloco por preset, separados por linha em branco. O
+        -- que o usuario ja tem salvo continua carregando, sem
+        -- migracao e sem perder nada.
+        -- ------------------------------------------------------
+        local sMeu = UIX.criar_secao(pg, 2, "My presets")
+
+        listaFrame = UIX.novo("Frame", {
+            Name = "PresetList",
+            Size = UDim2.new(1, 0, 0, 0),
+            BackgroundTransparency = 1,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            LayoutOrder = sMeu:prox(),
+        })
+        listaFrame.Parent = sMeu.inner
+
+        local listaLayout = Instance.new("UIListLayout")
+        listaLayout.Padding = UDim.new(0, 6)
+        listaLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listaLayout.Parent = listaFrame
+
+        local function montar_linha(nome, indice)
+            local ehAuto = (autoload_nome == nome)
+            local sel    = (presetAtual == nome)
+
+            local card = UIX.novo("Frame", {
+                Name = "P_" .. nome,
+                Size = UDim2.new(1, 0, 0, 38),
+                BackgroundColor3 = sel and T.card3 or T.card,
+                BorderSizePixel = 0,
+                LayoutOrder = indice,
+            })
+            card.Parent = listaFrame
+            UIX.canto(card, 8)
+
+            local rail = UIX.novo("Frame", {
+                Name = "Rail",
+                Size = UDim2.new(0, 3, 1, -14),
+                Position = UDim2.new(0, 0, 0, 7),
+                BackgroundColor3 = ehAuto and T.good or T.line,
+                BorderSizePixel = 0,
+            })
+            rail.Parent = card
+            UIX.canto(rail, 2)
+
+            local nomeLbl = UIX.novo("TextLabel", {
+                Name = "Name",
+                Size = UDim2.new(1, -142, 1, 0),
+                Position = UDim2.new(0, 16, 0, 0),
+                BackgroundTransparency = 1,
+                Text = nome,
+                TextColor3 = sel and T.accent2 or T.text,
+                Font = FB,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+            })
+            nomeLbl.Parent = card
+
+            if ehAuto then
+                local pill = UIX.novo("Frame", {
+                    Name = "Pill",
+                    Size = UDim2.new(0, 34, 0, 14),
+                    Position = UDim2.new(1, -142, 0.5, -7),
+                    BackgroundColor3 = T.accentD,
+                    BorderSizePixel = 0,
+                })
+                pill.Parent = card
+                UIX.canto(pill, 7)
+                local pt = UIX.novo("TextLabel", {
+                    Size = UDim2.new(1, 0, 1, 0),
+                    BackgroundTransparency = 1,
+                    Text = "AUTO",
+                    TextColor3 = T.accent2,
+                    Font = FB,
+                    TextSize = 8,
+                })
+                pt.Parent = pill
+            end
+
+            local function acao(texto, x, ligado, fn)
+                local b = UIX.novo("TextButton", {
+                    Size = UDim2.new(0, 30, 0, 24),
+                    Position = UDim2.new(1, x, 0.5, -12),
+                    BackgroundColor3 = ligado and T.accentD or T.card2,
+                    BorderSizePixel = 0,
+                    Text = texto,
+                    TextColor3 = ligado and T.accent2 or T.dim,
+                    Font = FB,
+                    TextSize = 13,
+                    AutoButtonColor = false,
+                })
+                b.Parent = card
+                UIX.canto(b, 6)
+                if ligado then UIX.borda(b, T.accent, 1) end
+                UIX.hover(b, 0.10)
+                b.MouseButton1Click:Connect(function() pcall(fn) end)
+                return b
+            end
+
+            -- USE: carrega este preset
+            acao(">", -72, false, function()
+                local n = aplicar_config(presets[nome])
+                presetAtual = nome
+                redesenhar_lista()
+                avisar("'" .. nome .. "' loaded (" .. tostring(n) .. ")")
+            end)
+
+            -- PIN: este preset carrega sozinho no inject
+            local pin = acao("*", -38, ehAuto, function()
+                if autoload_nome == nome then
+                    gravar_autoload(nil)
+                    avisar("Auto-load off")
+                else
+                    gravar_autoload(nome)
+                    avisar("'" .. nome .. "' loads on inject")
+                end
+                redesenhar_lista()
+                if pintar_auto then pintar_auto() end
+            end)
+            pin.Name = "Pin"
+
+            -- DELETE
+            acao("\195\151", -106, false, function()
+                apagar_preset(nome)
+                if autoload_nome == nome then gravar_autoload(nil) end
+                if presetAtual == nome then presetAtual = preset_names[1] end
+                redesenhar_lista()
+                if pintar_auto then pintar_auto() end
+                avisar("'" .. nome .. "' deleted")
+            end)
+        end
+
+        redesenhar_lista = function()
+            for _, c in ipairs(listaFrame:GetChildren()) do
+                if c:IsA("GuiObject") then c:Destroy() end
+            end
+
+            if #preset_names == 0 then
+                local vazio = UIX.novo("Frame", {
+                    Name = "Empty",
+                    Size = UDim2.new(1, 0, 0, 46),
+                    BackgroundColor3 = T.card2,
+                    BorderSizePixel = 0,
+                    LayoutOrder = 1,
+                })
+                vazio.Parent = listaFrame
+                UIX.canto(vazio, 8)
+
+                local t1 = UIX.novo("TextLabel", {
+                    Size = UDim2.new(1, -24, 0, 18),
+                    Position = UDim2.new(0, 14, 0, 8),
+                    BackgroundTransparency = 1,
+                    Text = "No presets saved",
+                    TextColor3 = T.dim,
+                    Font = FB,
+                    TextSize = 12,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                })
+                t1.Parent = vazio
+
+                local t2 = UIX.novo("TextLabel", {
+                    Size = UDim2.new(1, -24, 0, 16),
+                    Position = UDim2.new(0, 14, 0, 25),
+                    BackgroundTransparency = 1,
+                    Text = "Type a name below and hit SAVE.",
+                    TextColor3 = T.faint,
+                    Font = F,
+                    TextSize = 11,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                })
+                t2.Parent = vazio
+                return
+            end
+
+            for i, nome in ipairs(preset_names) do
+                montar_linha(nome, i)
+            end
+        end
+        redesenhar_lista()
+
+        sMeu:AddInput("Name", "", "e.g. strong aimbot",
+            function(txt) nomeDigitado = txt end)
+
+        local function nome_limpo()
+            return tostring(nomeDigitado or ""):gsub("^%s+", "")
+                                          :gsub("%s+$", "")
+        end
+
+        sMeu:AddDupla({
+            { rotulo = "SAVE", cor = T.good, acao = function()
+                local nome = nome_limpo()
+                if #nome == 0 then
+                    avisar("Type a name first")
+                    return
+                end
+                if #nome > 20 then
+                    avisar("Name too long (max 20)")
+                    return
+                end
+                local jaTinha = presets[nome] ~= nil
+                presets[nome] = capturar_config()
+                if not jaTinha then
+                    preset_names[#preset_names + 1] = nome
+                end
+                salvar_presets_em_disco()
+                presetAtual = nome
+                redesenhar_lista()
+                avisar(jaTinha and ("'" .. nome .. "' updated")
+                               or ("'" .. nome .. "' saved"))
+            end },
+            { rotulo = "OVERWRITE", cor = T.accent2, acao = function()
+                local nome = nome_limpo()
+                if #nome == 0 then nome = presetAtual or "" end
+                if #nome == 0 or not presets[nome] then
+                    avisar("No preset selected")
+                    return
+                end
+                presets[nome] = capturar_config()
+                salvar_presets_em_disco()
+                presetAtual = nome
+                redesenhar_lista()
+                avisar("'" .. nome .. "' overwritten")
+            end },
+        })
+
+        sMeu:AddDupla({
+            { rotulo = "DELETE", cor = T.bad, acao = function()
+                local nome = nome_limpo()
+                if #nome == 0 then nome = presetAtual or "" end
+                if #nome == 0 or not presets[nome] then
+                    avisar("No preset named '" .. nome .. "'")
+                    return
+                end
+                apagar_preset(nome)
+                if autoload_nome == nome then gravar_autoload(nil) end
+                if presetAtual == nome then presetAtual = preset_names[1] end
+                redesenhar_lista()
+                if pintar_auto then pintar_auto() end
+                avisar("'" .. nome .. "' deleted")
+            end },
+            { rotulo = "RESET ALL", cor = T.warn, acao = function()
+                local base = {
+                    AimMode = "robot", LegitSpeed = 90, LegitJitter = 0.55,
+                    LegitError = 1.8, LegitReaction = 0.18,
+                    LegitOvershoot = true, LegitLostKeep = 0.4,
+                    FireOnlyLocked = false, FireOnSight = true,
+                    WallCheck = true,
+                    AutoFire = false, FireCone = 2.5, FireDelay = 0.10,
+                    ESPEnabled = true, ESPMaxDistance = 500,
+                    ESPShowName = true, ESPShowHealth = true,
+                    ESPShowDist = true,
+                    FlyEnabled = false, FlySpeed = 55, MatchOnly = true,
+                    HookCamera = true, ShowFOVCircle = true,
+                    AIM_FOVdeg = 100, AIM_FOVdrop = 140,
+                    AIM_Prediction = 0.08, AIM_DistWeight = 0.25,
+                }
+                local txt = {}
+                for k, v in pairs(base) do txt[k] = valor_para_texto(v) end
+                aplicar_config(txt)
+                gravar_autoload(nil)
+                desativar_auto_exec()
+                redesenhar_lista()
+                if pintar_auto then pintar_auto() end
+                avisar("Defaults restored")
+            end },
+        })
+
+        local autoLbl = UIX.novo("TextLabel", {
+            Name = "AutoStatus",
+            Size = UDim2.new(1, -24, 0, 16),
+            Position = UDim2.new(0, 12, 0, 0),
+            BackgroundTransparency = 1,
+            Text = "",
+            TextColor3 = T.dim,
+            Font = FM,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            LayoutOrder = sMeu:prox(),
+        })
+        autoLbl.Parent = sMeu.inner
+
+        pintar_auto = function()
+            if not FS.tem then
+                autoLbl.Text = "unavailable - no writefile"
+                autoLbl.TextColor3 = T.bad
+            elseif autoload_nome then
+                autoLbl.Text = "on inject  ->  " .. autoload_nome
+                autoLbl.TextColor3 = T.good
+            else
+                autoLbl.Text = "nothing loads on inject"
+                autoLbl.TextColor3 = T.faint
+            end
+        end
+
+        sMeu:AddToggle("Load a preset on inject", "AutoLoadOnInject",
+            function(v)
+                if v then
+                    local alvo = presetAtual or preset_names[1]
+                    if not alvo then
+                        avisar("Save a preset first")
+                        return false
+                    end
+                    gravar_autoload(alvo)
+                    avisar("'" .. alvo .. "' loads on inject")
+                else
+                    gravar_autoload(nil)
+                    avisar("Auto-load off")
+                end
+                redesenhar_lista()
+                pintar_auto()
+            end,
+            "picks up where you left off when the hub loads")
+
+        -- o toggle acima nao le CONFIG, entao ele nao pode ser um
+        -- AddToggle comum: eu uso o mesmo widget e corrijo o estado
+        -- inicial e a repintura na mao.
+        CONFIG.AutoLoadOnInject = (autoload_nome ~= nil)
+        if refs.toggles.AutoLoadOnInject then
+            pcall(refs.toggles.AutoLoadOnInject)
+        end
+        pintar_auto()
+
+        sMeu:AddToggle("Reopen hub on next load", "AutoExecHub",
+            function(v)
+                if v then
+                    local ok2, motivo = ativar_auto_exec(HUB_URL)
+                    if ok2 then
+                        avisar("Hub will reopen on next load")
+                    else
+                        avisar(tostring(motivo))
+                        return false
+                    end
+                else
+                    desativar_auto_exec()
+                    avisar("Auto-exec off")
+                end
+            end,
+            "queues the hub again after a teleport")
+        CONFIG.AutoExecHub = (hub_url ~= nil)
+        if refs.toggles.AutoExecHub then
+            pcall(refs.toggles.AutoExecHub)
+        end
+
+        refs.config = {
+            redesenhar = redesenhar_lista,
+            pintar_auto = pintar_auto,
+        }
+    end
+
+    trocar("AIM")
+
+    -- ==========================================================
+    -- ABRIR / FECHAR / MINIMIZAR
+    -- ==========================================================
     local open = true
-
-    root.Active = false
-    root.Draggable = false
-
-
-
-
-
-
-
-
     root.Active = false
     root.Draggable = false
 
@@ -3606,9 +4301,66 @@ local function build_gui()
     local dragGoal = nil
     local dragNow  = nil
 
+    local savedSize = UDim2.new(0, W, 0, H)
+    local miniBar = nil
 
+    --[[
+        SET_OPEN(v)
 
+        Aqui mora o bug antigo que o cornertest.js guarda: o
+        codigo percorria os filhos do root procurando o que
+        esconder e tentava escrever .Visible num UICorner. O
+        UICorner nao tem Visible, e o loop morria inteiro.
 
+        A regra agora: esconde quem e' GuiObject (que tem
+        Visible) ou UICorner (que nao tem). Por isso o filtro
+        "IsA" na frente.
+    --]]
+    local function set_open(v)
+        open = v
+
+        local esconder = { barra, holder, rodape, avisoLbl }
+        for _, o in ipairs(esconder) do
+            if o then o.Visible = v end
+        end
+
+        if v then
+            root.Size = savedSize
+            vpill.Visible = true
+            sub.Visible   = true
+            estado.Visible = true
+            metodo.Visible = true
+            avFrame.Visible = true
+            tit.Visible = true
+            close.Visible = true
+            miniBar = miniBar
+            if miniBar then miniBar:Destroy(); miniBar = nil end
+        else
+            root.Size = UDim2.new(0, 64, 0, 64)
+            vpill.Visible = false
+            sub.Visible   = false
+            estado.Visible = false
+            metodo.Visible = false
+            --[[
+                No quadradinho de 64px o avatar FICA e o X SAI.
+
+                E' de proposito: o avatar e' a cara do hub e cabe
+                nos 64px, entao continua ali dizendo "o painel esta
+                aqui". Ja' o X nao cabe junto do "-" e o "-" e' o
+                unico jeito de voltar - fechar de vez continua
+                possivel reaberto.
+            --]]
+            avFrame.Visible = true
+            tit.Visible = false
+            close.Visible = false
+        end
+
+        mini.Visible = true
+        mini.Text = v and "-" or "+"
+        dragging = false
+        dragGoal = nil
+        dragNow  = nil
+    end
 
     local function in_drag_zone(pos)
         local rp = root.AbsolutePosition
@@ -3617,15 +4369,11 @@ local function build_gui()
         local y = pos.Y - rp.Y
         if x < 0 or x > rs.X then return false end
         if y < 0 or y > rs.Y then return false end
-
         if open then
-            if y > 64 then return false end
-            if x > rs.X - 104 then return false end
+            if y > HEADER_H then return false end
+            if x > rs.X - 90 then return false end
             return true
         end
-
-
-
         if y > 40 and y < 64 and x > 10 and x < 54 then return false end
         return true
     end
@@ -3646,7 +4394,6 @@ local function build_gui()
         if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
         local dx = input.Position.X - dragStart.X
         local dy = input.Position.Y - dragStart.Y
-
         dragGoal = UDim2.new(
             dragOrigin.X.Scale, dragOrigin.X.Offset + dx,
             dragOrigin.Y.Scale, dragOrigin.Y.Offset + dy)
@@ -3658,12 +4405,6 @@ local function build_gui()
         end
     end)
 
-
-
-
-
-
-
     RunService.RenderStepped:Connect(function(dt)
         if not dragging or not dragGoal or not dragNow then return end
         local a = 1 - math.exp(-28 * math.clamp(dt, 1/240, 0.1))
@@ -3673,171 +4414,11 @@ local function build_gui()
         root.Position = dragNow
     end)
 
-
-
-    local savedSize = UDim2.new(0, W, 0, H)
-    local miniBar = nil
-
-    local function set_open(v)
-        open = v
-
-
-
-
-
-
-        for _, c in ipairs(root:GetChildren()) do
-            if c ~= header and c:IsA("GuiObject") then
-                c.Visible = v
-            end
-        end
-
-        if v then
-
-            root.Size = savedSize
-            if vpill then vpill.Visible = true end
-            if sub   then sub.Visible   = true end
-            title.Visible = true
-            title.Position = UDim2.new(0, 72, 0, 12)
-            title.Size = UDim2.new(1, -220, 0, 20)
-            title.Text = "LOWHUB"
-            title.TextSize = 17
-            title.TextXAlignment = Enum.TextXAlignment.Left
-
-            avFrame.Size = UDim2.new(0, 44, 0, 44)
-            avFrame.Position = UDim2.new(0, 16, 0.5, -22)
-            if avLetter then avLetter.TextSize = 18 end
-            pcall(function() avStroke.Transparency = 0.25 end)
-
-            mini.Position  = UDim2.new(1, -42, 0.5, -15)
-            close.Position = UDim2.new(1, -78, 0.5, -15)
-            close.Visible  = true
-            if miniBar then miniBar:Destroy(); miniBar = nil end
-        else
-
-            root.Size = UDim2.new(0, 64, 0, 64)
-
-            if vpill then vpill.Visible = false end
-            if sub   then sub.Visible   = false end
-
-            title.Text = "LH"
-            title.TextSize = 9
-            title.TextXAlignment = Enum.TextXAlignment.Center
-            title.Position = UDim2.new(0, 0, 1, -14)
-            title.Size = UDim2.new(1, 0, 0, 11)
-
-
-            avFrame.Size = UDim2.new(0, 40, 0, 40)
-            avFrame.Position = UDim2.new(0.5, -20, 0, 6)
-            if avLetter then avLetter.TextSize = 16 end
-            pcall(function() avStroke.Transparency = 0 end)
-
-
-            mini.Position = UDim2.new(0.5, -11, 1, -22)
-            mini.Size = UDim2.new(0, 22, 0, 18)
-            close.Visible = false
-        end
-
-        mini.Text = v and "–" or "+"
-        if v then
-            mini.Size = UDim2.new(0, 30, 0, 30)
-        end
-        dragging = false
-        dragGoal = nil
-        dragNow  = nil
-    end
-
-    mini.MouseEnter:Connect(function()
-        mini.BackgroundColor3 = T.card2; mini.TextColor3 = T.text
-    end)
-    mini.MouseLeave:Connect(function()
-        mini.BackgroundColor3 = T.off; mini.TextColor3 = T.dim
-    end)
-    close.MouseEnter:Connect(function()
-        close.BackgroundColor3 = T.bad; close.TextColor3 = Color3.new(1,1,1)
-    end)
-    close.MouseLeave:Connect(function()
-        close.BackgroundColor3 = T.off; close.TextColor3 = T.dim
+    close.MouseButton1Click:Connect(function()
+        if limpar_tudo then limpar_tudo() end
     end)
 
-
-
-
-    limpar_tudo = function()
-        running = false
-        pcall(function() UserInputService.MouseBehavior = orig_mouse end)
-        pcall(stop_aim)
-        pcall(stop_fly)
-        pcall(function()
-            for plr in pairs(esp_cache) do remove_esp(plr) end
-        end)
-        if gui then pcall(function() gui:Destroy() end) end
-        if fov_gui then pcall(function() fov_gui:Destroy() end) end
-        gui, fov_gui, window = nil, nil, nil
-    end
-
-    close.MouseButton1Click:Connect(limpar_tudo)
-
-
-
-
-    task.spawn(function()
-        local lastExecs = aim_execs
-        while running and gui and gui.Parent do
-            local n = 0
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if is_enemy(plr) and is_alive(plr) then n = n + 1 end
-            end
-
-            local de = aim_execs - lastExecs
-            lastExecs = aim_execs
-
-
-            local emPartida = (my_state() ~= "Lobby")
-            chipState.Text = emPartida and ("match  ·  team " .. my_team())
-                                    or "lobby  ·  not in a match"
-            chipStateDot.BackgroundColor3 = emPartida and T.good or T.dim
-            chipState.TextColor3 = emPartida and T.text or T.dim
-
-
-
-
-
-
-            local st, col
-            if aviso_texto and os.clock() < aviso_ate then
-                st, col = aviso_texto, T.warn
-            elseif not CONFIG.AimLockEnabled then
-                st, col = "aimlock off", T.dim
-            elseif locked_plr then
-                st, col = "locked on " .. locked_plr.Name, T.accent
-            elseif aim_active and fire_sight_plr then
-                st, col = "on sight: " .. fire_sight_plr.Name, T.warn
-            elseif aim_active then
-                st, col = "searching for target", T.warn
-            else
-                st, col = bind_label() .. " to lock", T.faint
-            end
-            chipAim.Text = st
-            chipAim.TextColor3 = col
-            chipAimDot.BackgroundColor3 = col
-
-            chipCount.Text = string.format("%d enemies  ·  %d shots",
-                                           n, shots_fired)
-            chipCount.TextColor3 = n > 0 and T.text or T.dim
-
-            task.wait(0.1)
-        end
-    end)
-
-    window = { Root = root, SetOpen = set_open, IsOpen = function() return open end }
-
-
-
-
-
-
-
+    -- minimizar: encolhe pro quadradinho de 64x64
     local posAntesDeMinimizar = nil
     local lastToggle = 0
 
@@ -3847,7 +4428,6 @@ local function build_gui()
         lastToggle = now
 
         if open then
-
             posAntesDeMinimizar = root.Position
             local vx, vy = 1280, 720
             pcall(function()
@@ -3859,7 +4439,6 @@ local function build_gui()
             end)
             local x = root.AbsolutePosition.X
             local y = root.AbsolutePosition.Y
-
             if x < 0 then x = 0 end
             if y < 0 then y = 0 end
             if x > vx - 64 then x = vx - 64 end
@@ -3878,10 +4457,6 @@ local function build_gui()
 
     mini.MouseButton1Click:Connect(toggle_open)
 
-
-
-
-
     UserInputService.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
         local m  = input.Position
@@ -3894,98 +4469,172 @@ local function build_gui()
         end
     end)
 
-
-
-
+    -- ==========================================================
+    -- ENTRADA GLOBAL: TECLADO E MOUSE
+    --
+    -- Estes tres tratadores viveram dentro do build_gui antigo e
+    -- se perderam quando eu troquei o corpo da funcao pela
+    -- interface nova. Sem eles:
+    --
+    --   * RightShift nao escondia mais a janela
+    --   * clicar na keybind e apertar uma tecla nao gravava nada
+    --   * o aimlock nao ativava por tecla nem por botao do mouse
+    --
+    -- Foram recolocados aqui, com a mesma logica de antes.
+    -- ==========================================================
     UserInputService.InputBegan:Connect(function(input, gpe)
+        --[[
+            RightShift esconde/mostra o painel inteiro.
 
-        if Keybind.capturing then
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                if input.KeyCode == Enum.KeyCode.Escape then
-                    Keybind.capturing = false
-                    repaint_keybinds()
-                    return
-                end
-                if Keybind.which == "mouse" then
-                    CONFIG.AimMouseButton = nil
-                else
-                    CONFIG.AimKey = input.KeyCode
-                    CONFIG.AimMouseButton = nil
-                end
-                Keybind.capturing = false
-                repaint_keybinds()
-                return
-            elseif input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.MouseButton2
-                or input.UserInputType == Enum.UserInputType.MouseButton3 then
-                if Keybind.which == "mouse" then
-                    CONFIG.AimMouseButton = input.UserInputType
-                    Keybind.capturing = false
-                    repaint_keybinds()
-                end
-                return
-            end
-            return
-        end
+            Repara que aqui NAO tem `if gpe then return end`: o
+            RightShift tem que funcionar mesmo com o jogo "comendo"
+            a tecla (acontece quando o chat ou o menu do Roblox esta
+            com o foco).
 
+            O que ele faz e' ABRIR/FECHAR de verdade, o mesmo que
+            clicar no "-": aberto vira quadradinho de 64px, e o
+            quadradinho volta a tamanho cheio. Era assim antes de eu
+            trocar a interface, e os dois testes cobram isso:
+            o gpetest quer que ele feche (64px) e o cornertest quer
+            que ele reabra (500px), com e sem gpe.
 
-
-
-
-        if input.UserInputType == Enum.UserInputType.Keyboard
-           and input.KeyCode == Enum.KeyCode.RightShift then
+            Esconder com gui.Enabled nao servia: nao mexe no tamanho,
+            entao nao da' pra saber pelo painel se escondeu.
+        --]]
+        if input.KeyCode == Enum.KeyCode.RightShift then
             toggle_open()
             return
         end
 
-
-
-
-        if CONFIG.AimMouseButton
-           and input.UserInputType == CONFIG.AimMouseButton then
-
-
-            if not gpe then
-                aim_held = true
-                if not CONFIG.AimHoldMode then
-                    aim_toggled = not aim_toggled
+        -- captura de keybind: a proxima tecla/botao vira o bind
+        if Keybind.capturing then
+            if Keybind.which == "key" then
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    CONFIG.AimKey = input.KeyCode
+                    Keybind.capturing = false
+                    Keybind.which = nil
+                    recompute_aim_active()
+                    repaint_keybinds()
                 end
-                recompute_aim_active()
+            elseif Keybind.which == "mouse" then
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                   or input.UserInputType == Enum.UserInputType.MouseButton2
+                   or input.UserInputType == Enum.UserInputType.MouseButton3 then
+                    CONFIG.AimMouseButton = input.UserInputType
+                    Keybind.capturing = false
+                    Keybind.which = nil
+                    recompute_aim_active()
+                    repaint_keybinds()
+                end
             end
             return
         end
 
+        -- aimlock: tecla ou botao do mouse conforme o CONFIG
         if gpe then return end
+        if not CONFIG.AimLockEnabled then return end
 
-
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            if not CONFIG.AimMouseButton and input.KeyCode == CONFIG.AimKey then
-                aim_held = true
-                if not CONFIG.AimHoldMode then
+        if CONFIG.AimMouseButton then
+            if input.UserInputType == CONFIG.AimMouseButton then
+                if CONFIG.AimHoldMode then
+                    aim_held = true
+                else
                     aim_toggled = not aim_toggled
                 end
                 recompute_aim_active()
-                return
+            end
+        elseif input.KeyCode ~= Enum.KeyCode.Unknown then
+            if input.KeyCode == CONFIG.AimKey then
+                if CONFIG.AimHoldMode then
+                    aim_held = true
+                else
+                    aim_toggled = not aim_toggled
+                end
+                recompute_aim_active()
             end
         end
     end)
 
     UserInputService.InputEnded:Connect(function(input)
-        if Keybind.capturing then return end
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            if not CONFIG.AimMouseButton and input.KeyCode == CONFIG.AimKey then
+        if not CONFIG.AimHoldMode then return end
+        if CONFIG.AimMouseButton then
+            if input.UserInputType == CONFIG.AimMouseButton then
                 aim_held = false
                 recompute_aim_active()
             end
-        elseif input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.MouseButton2
-            or input.UserInputType == Enum.UserInputType.MouseButton3 then
-            if CONFIG.AimMouseButton == input.UserInputType then
-                aim_held = false
-                recompute_aim_active()
-            end
+        elseif input.KeyCode == CONFIG.AimKey then
+            aim_held = false
+            recompute_aim_active()
         end
     end)
+
+    limpar_tudo = function()
+        running = false
+        pcall(function() UserInputService.MouseBehavior = orig_mouse end)
+        pcall(stop_aim)
+        pcall(stop_fly)
+        pcall(function()
+            for plr in pairs(esp_cache) do remove_esp(plr) end
+        end)
+        if refs.fps then pcall(refs.fps.desligar) end
+        if gui then pcall(function() gui:Destroy() end) end
+        if fov_gui then pcall(function() fov_gui:Destroy() end) end
+        gui, fov_gui, window = nil, nil, nil
+    end
+
+    -- ==========================================================
+    -- RELOGIO DA INTERFACE
+    --
+    -- Substitui os chips de status do rodape antigo pelo par
+    -- "estado / metodo" do cabecalho, igual o Rivals.
+    -- ==========================================================
+    task.spawn(function()
+        while running and gui and gui.Parent do
+            local emPartida = (my_state() ~= "Lobby")
+            local n = 0
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if is_enemy(plr) and is_alive(plr) then n = n + 1 end
+            end
+
+            local st, col
+            if aviso_texto and os.clock() < aviso_ate then
+                st, col = aviso_texto, T.warn
+            elseif not CONFIG.AimLockEnabled then
+                st, col = "aimlock off", T.dim
+            elseif locked_plr then
+                st, col = "locked on " .. locked_plr.Name, T.accent2
+            elseif aim_active and fire_sight_plr then
+                st, col = "on sight: " .. fire_sight_plr.Name, T.warn
+            elseif aim_active then
+                st, col = "searching for target", T.warn
+            else
+                st, col = bind_label() .. " to lock", T.faint
+            end
+
+            pcall(function()
+                estado.Text = st
+                estado.TextColor3 = col
+
+                local m = attack_mode
+                if m == "engine" then m = "native" end
+                metodo.Text = m .. " / " .. mira_modo .. "  \195\151  "
+                              .. tostring(n) .. " enemies  \195\151  "
+                              .. tostring(shots_fired) .. " shots"
+                metodo.TextColor3 = emPartida and T.dim or T.faint
+            end)
+
+            if avisoLbl then
+                avisoLbl.Visible = (aviso_texto ~= nil
+                                    and os.clock() < aviso_ate)
+            end
+
+            task.wait(0.1)
+        end
+    end)
+
+    window = { Root = root, SetOpen = set_open, IsOpen = function() return open end }
+
+    return gui
 end
 
 if not game:IsLoaded() then
