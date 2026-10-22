@@ -293,7 +293,7 @@ local CONFIG = {
     AimKey          = Enum.KeyCode.E,
     AimMouseButton  = nil,
 
-    AimMode         = "toggle",
+    AimMode         = "hold",
     -- Agora e VELOCIDADE, nao fracao: 0 = teto cheio (14
     -- graus/frame), 0.85 = devagar. 0.35 acompanha qualquer
     -- jogador sem parecer teleporte.
@@ -805,7 +805,13 @@ local function repaint_keybinds()
 end
 
 local aim_held    = false
-local aim_toggled = false
+--[[
+    aim_toggled saiu junto com o modo "toggle".
+
+    Ele guardava o estado de ligado/desligado da mira por tecla.
+    Como agora so existem HOLD (segura) e ALWAYS (sempre), nao
+    tem mais estado pra guardar - `aim_held` ja cobre tudo.
+--]]
 local aim_active  = false
 local aim_target  = nil
 local locked      = nil
@@ -816,14 +822,21 @@ local aim_erro    = 999
 
 local function recompute_aim()
     if not CONFIG.AimEnabled then aim_active = false return end
+
+    --[[
+        SO HOLD E ALWAYS
+
+        O modo "toggle" saiu do menu - ele e o HOLD faziam a
+        mesma coisa, so com nomes diferentes. Se algum preset
+        velho ainda trouxer "toggle", eu trato como HOLD, que
+        e' o comportamento mais parecido (precisa da tecla).
+    --]]
     local m = CONFIG.AimMode
     if m == "always" then
         aim_active = true
-    elseif m == "hold" then
-        aim_active = aim_held
     else
-
-        aim_active = aim_toggled
+        -- hold (e qualquer valor antigo, tipo "toggle")
+        aim_active = aim_held
     end
 end
 
@@ -1531,7 +1544,32 @@ local function refresh_esp()
             if e then
                 local raiz = ch:FindFirstChild("HumanoidRootPart")
 
+                --[[
+                    LIMITE DE ALCANCE DO ESP  (bug: nao existia)
+
+                    O slider "Range" (ESPMaxDistance, padrao 600)
+                    estava no menu, salvava no preset, e NAO ERA
+                    LIDO EM LUGAR NENHUM. O ESP desenhava todo
+                    mundo que existisse no Workspace - inclusive
+                    os ~40 bonecos de treino do ShootingRange e
+                    qualquer coisa do outro lado do mapa.
+
+                    A distancia so era calculada MAIS ABAIXO, e
+                    so pra MOSTRAR o numero. Nunca pra decidir se
+                    desenhava.
+
+                    Agora calculo aqui, ANTES de desenhar, e saio
+                    fora se passar do limite. Um calculo so serve
+                    pros dois usos (filtrar e mostrar).
+                --]]
+                local minha = get_root(LP)
+                local dist = (minha and raiz)
+                             and (raiz.Position - minha.Position).Magnitude
+                             or nil
+
                 if not hum or not raiz then
+                    esconder_esp(e)
+                elseif dist and dist > CONFIG.ESPMaxDistance then
                     esconder_esp(e)
                 else
 
@@ -1600,12 +1638,11 @@ local function refresh_esp()
                         end
 
                         local bits = {}
-                        if CONFIG.ESPShowDist and raiz then
-                            local minha = get_root(LP)
-                            if minha then
-                                bits[#bits + 1] =
-                                    math.floor((raiz.Position - minha.Position).Magnitude) .. "m"
-                            end
+                        if CONFIG.ESPShowDist and dist then
+                            -- reaproveita o calculo do filtro de
+                            -- alcance, feito la em cima. Antes isto
+                            -- recalculava a mesma coisa.
+                            bits[#bits + 1] = math.floor(dist) .. "m"
                         end
                         if CONFIG.ESPShowHealth then
                             bits[#bits + 1] = math.floor(hp) .. "/" .. math.floor(maxhp)
@@ -1814,11 +1851,18 @@ local input_conn = UserInputService.InputBegan:Connect(function(input, gp)
 
     if gp then return end
     if key_pressed(input) then
-        aim_held = true
+        --[[
+            A tecla so LEVANTA a bandeira do "segurando".
 
-        if CONFIG.AimMode == "toggle" then
-            aim_toggled = not aim_toggled
-        end
+            Tinha aqui um `if AimMode == "toggle"` que invertia
+            uma flag a cada aperto. Com o modo toggle fora do
+            menu, isso virou codigo morto - e ainda confundiria,
+            porque no HOLD o InputEnded ja baixa a bandeira.
+
+            Agora e' so isso: apertou, mira. Soltou (InputEnded
+            logo abaixo), para.
+        --]]
+        aim_held = true
         recompute_aim()
     end
 end)
@@ -2397,6 +2441,180 @@ local function criar_titulo(pai, ordem, texto)
     return t
 end
 
+--[[
+    SECAO DOBRavel  (as "abinhas" do Tribes)
+
+    O Tribes tem isso e o Rivals nao tinha: cada bloco de opcoes
+    e' um cartao com titulo clicavel que abre e fecha. Em vez de
+    um monte de titulo solto empilhado, fica uma lista organizada
+    onde voce esconde o que nao usa.
+
+    Portado do lowhub_tribes.lua (new_section) pra ficar com a
+    MESMA cara nos dois hubs - era o pedido.
+
+    Devolve um objeto `s` com:
+
+        s.inner          -> Frame onde as linhas vao
+        s._o             -> contador de ordem (some sozinho)
+        s:AddToggle(...) -> atalho que ja posiciona dentro
+        s:AddSlider(...) -> idem
+        s:AddOpcoes(...) -> idem
+        s:AddKeybind(..) -> idem
+
+    Os opcoes continuam sendo as mesmas funcoes (criar_toggle,
+    criar_slider...), so que apontando pra dentro do cartao em
+    vez de pra pagina. Assim nao duplico codigo de controle.
+--]]
+local function criar_secao(pai, ordem, titulo)
+    local wrap = novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 32),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = UI.cor.cartao,
+        BorderSizePixel = 0,
+        LayoutOrder = ordem,
+    })
+    wrap.Parent = pai
+
+    local canto = Instance.new("UICorner")
+    canto.CornerRadius = UDim.new(0, 8)
+    canto.Parent = wrap
+
+    local borda = Instance.new("UIStroke")
+    borda.Color = UI.cor.borda
+    borda.Thickness = 1
+    borda.Transparency = 0.55
+    borda.Parent = wrap
+
+    -- cabecalho: clicavel, com barrinha de destaque a esquerda
+    local head = novo("TextButton", {
+        Name = "Head",
+        Size = UDim2.new(1, 0, 0, 32),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+    })
+    head.Parent = wrap
+
+    local barra = novo("Frame", {
+        Size = UDim2.new(0, 3, 0, 14),
+        Position = UDim2.new(0, 12, 0.5, -7),
+        BackgroundColor3 = UI.cor.roxo,
+        BorderSizePixel = 0,
+    })
+    barra.Parent = head
+
+    local cantoBarra = Instance.new("UICorner")
+    cantoBarra.CornerRadius = UDim.new(1, 0)
+    cantoBarra.Parent = barra
+
+    local rotulo = novo("TextLabel", {
+        Size = UDim2.new(1, -58, 1, 0),
+        Position = UDim2.new(0, 22, 0, 0),
+        BackgroundTransparency = 1,
+        Text = string.upper(titulo or ""),
+        TextColor3 = UI.cor.texto,
+        Font = UI.fonteB,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    rotulo.Parent = head
+
+    local seta = novo("TextLabel", {
+        Size = UDim2.new(0, 18, 0, 18),
+        Position = UDim2.new(1, -28, 0.5, -9),
+        BackgroundTransparency = 1,
+        Text = "v",
+        TextColor3 = UI.cor.fraco,
+        Font = UI.fonteB,
+        TextSize = 11,
+    })
+    seta.Parent = head
+
+    -- corpo onde as opcoes entram
+    local inner = novo("Frame", {
+        Name = "Body",
+        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 32),
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y,
+    })
+    inner.Parent = wrap
+
+    local il = Instance.new("UIListLayout")
+    il.Padding = UDim.new(0, 1)
+    il.SortOrder = Enum.SortOrder.LayoutOrder
+    il.Parent = inner
+
+    -- respiro no fim, pra ultima linha nao colar na borda
+    local rabo = novo("Frame", {
+        Size = UDim2.new(1, 0, 0, 5),
+        BackgroundTransparency = 1,
+        LayoutOrder = 9999,
+    })
+    rabo.Parent = inner
+
+    local s = {
+        inner = inner,
+        _o    = 0,
+        wrap  = wrap,
+        head  = head,
+        open  = true,
+        seta  = seta,
+        barra = barra,
+        rotulo = rotulo,
+        borda = borda,
+    }
+
+    function s:SetOpen(v)
+        self.open = v
+        inner.Visible = v
+        rabo.Visible = v
+        seta.Text = v and "v" or ">"
+        seta.TextColor3 = v and UI.cor.fraco or UI.cor.roxo
+        barra.BackgroundColor3 = v and UI.cor.roxo or UI.cor.borda
+        rotulo.TextColor3 = v and UI.cor.texto or UI.cor.fraco
+        borda.Transparency = v and 0.55 or 0.85
+    end
+
+    head.MouseEnter:Connect(function()
+        head.BackgroundTransparency = 0.9
+        head.BackgroundColor3 = UI.cor.cartao2
+        rotulo.TextColor3 = s.open and UI.cor.texto or UI.cor.roxo2
+    end)
+    head.MouseLeave:Connect(function()
+        head.BackgroundTransparency = 1
+        rotulo.TextColor3 = s.open and UI.cor.texto or UI.cor.fraco
+    end)
+    head.MouseButton1Click:Connect(function()
+        s:SetOpen(not s.open)
+    end)
+
+    -- atalhos: entram dentro do cartao, com ordem automatica
+    function s:prox()
+        self._o = self._o + 1
+        return self._o
+    end
+
+    function s:AddToggle(texto, chave, aoMudar, sub)
+        return criar_toggle(self.inner, self:prox(), texto, chave, aoMudar, sub)
+    end
+
+    function s:AddSlider(texto, chave, min, max, passo, fmt)
+        return criar_slider(self.inner, self:prox(),
+                            texto, chave, min, max, passo, fmt)
+    end
+
+    function s:AddOpcoes(texto, chave, opcoes)
+        return criar_opcoes(self.inner, self:prox(), texto, chave, opcoes)
+    end
+
+    function s:AddKeybind(texto, sub, qual)
+        return criar_keybind(self.inner, self:prox(), texto, sub, qual)
+    end
+
+    return s
+end
+
 local function nova_pagina(holder, nome)
     local scroll = novo("ScrollingFrame", {
         Name = "pg_" .. nome,
@@ -2434,7 +2652,7 @@ local PRESETS = {
         cfg  = {
             AimEnabled = true, AimSmooth = 0.75, AimFOV = 55,
             AimTarget = "HEAD", WallCheck = true,
-            AimMode = "toggle",
+            AimMode = "hold",
             TriggerBot = false,
             ESPEnabled = true, ESPBox = true,
             ESPShowHealth = true, ESPShowDist = false,
@@ -2448,7 +2666,7 @@ local PRESETS = {
         cfg  = {
             AimEnabled = true, AimSmooth = 0.40, AimFOV = 110,
             AimTarget = "HEAD", WallCheck = true,
-            AimMode = "toggle",
+            AimMode = "hold",
             TriggerBot = true, FireDelay = 0.10,
             ESPEnabled = true, ESPBox = true,
             ESPShowHealth = true, ESPShowDist = true,
@@ -2794,106 +3012,143 @@ local function build()
 
     do
         local pg = refs.paginas.AIM
-        criar_titulo(pg, 1, "Aim")
-        criar_toggle(pg, 2, "Aimlock", "AimEnabled",
+
+        -- ==================================================
+        -- ABINHAS DA ABA AIM
+        --
+        -- Tudo agora vive dentro de cartoes dobráveis, igual ao
+        -- Tribes. A "Aimlock key" virou secao propria dentro da
+        -- aba de aimlock - era onde ela devia estar desde o
+        -- comeco, ja que so existe por causa do modo HOLD.
+        -- ==================================================
+
+        local sMain = criar_secao(pg, 1, "Aimlock")
+        sMain:AddToggle("Enabled", "AimEnabled",
             function() recompute_aim() end,
             "locks your aim onto the closest enemy")
-        criar_opcoes(pg, 3, "Activation", "AimMode", {
-            { rotulo = "KEY",    valor = "toggle" },
+
+        --[[
+            ACTIVATION: so HOLD e ALWAYS.
+
+            Tinha tres (KEY / HOLD / ALWAYS). O "KEY" e o "HOLD"
+            faziam exatamente a mesma coisa - o nome era diferente
+            e mais nada. Ter os dois lado a lado so confundia.
+
+              HOLD   -> mira enquanto voce segura a tecla
+              ALWAYS -> mira o tempo todo, sem apertar nada
+        --]]
+        sMain:AddOpcoes("Activation", "AimMode", {
             { rotulo = "HOLD",   valor = "hold"   },
             { rotulo = "ALWAYS", valor = "always" },
         })
 
-        criar_titulo(pg, 14, "Aimlock key")
-        criar_keybind(pg, 15, "Keyboard", "click and press any key", "key")
-        criar_keybind(pg, 16, "Mouse", "click and press a mouse button", "mouse")
+        --[[
+            A tecla do aimlock, na propria aba do aimlock.
 
-        criar_titulo(pg, 4, "Target")
-        criar_opcoes(pg, 17, "Hitbox", "AimTarget", {
+            So faz diferenca no modo HOLD - no ALWAYS nao tem o
+            que segurar. Deixo sempre a vista mesmo assim, pra
+            voce configurar antes de trocar o modo.
+        --]]
+        local sKey = criar_secao(pg, 2, "Aimlock key")
+        sKey:AddKeybind("Keyboard", "click and press any key", "key")
+        sKey:AddKeybind("Mouse", "click and press a mouse button", "mouse")
+
+        local sAlvo = criar_secao(pg, 3, "Target")
+        sAlvo:AddOpcoes("Hitbox", "AimTarget", {
             { rotulo = "HEAD", valor = "HEAD" },
             { rotulo = "BODY", valor = "BODY" },
             { rotulo = "ROOT", valor = "HRP"  },
         })
-        criar_slider(pg, 5, "Smoothness", "AimSmooth", 0, 0.8, 0.05,
+        sAlvo:AddSlider("Smoothness", "AimSmooth", 0, 0.8, 0.05,
             function(v) return string.format("%.2f", v) end)
-        criar_slider(pg, 6, "FOV (pixels)", "AimFOV", 20, 400, 10,
+        sAlvo:AddSlider("FOV (pixels)", "AimFOV", 20, 400, 10,
             function(v) return tostring(math.floor(v)) .. "px" end)
 
-        criar_titulo(pg, 7, "Fire")
-        criar_toggle(pg, 9, "Triggerbot", "TriggerBot", nil,
+        local sTiro = criar_secao(pg, 4, "Fire")
+        sTiro:AddToggle("Triggerbot", "TriggerBot", nil,
             "fires when your crosshair is ON the target")
-        criar_slider(pg, 10, "Fire interval", "FireDelay", 0.02, 0.4, 0.01,
+        sTiro:AddSlider("Fire interval", "FireDelay", 0.02, 0.4, 0.01,
             function(v) return string.format("%.2fs", v) end)
 
-        criar_titulo(pg, 11, "Filters")
-        criar_toggle(pg, 12, "Wall check", "WallCheck", nil,
+        local sFiltro = criar_secao(pg, 5, "Filters")
+        sFiltro:AddToggle("Wall check", "WallCheck", nil,
             "wont aim at enemies behind walls")
-        criar_toggle(pg, 13, "FOV circle", "ShowFOVCircle", nil,
+        sFiltro:AddToggle("FOV circle", "ShowFOVCircle", nil,
             "shows the aim range on screen")
+
+        -- deixa a lista de secoes a mao, pra fechar/abrir tudo
+        refs.secoes_aim = {
+            sMain, sKey, sAlvo, sTiro, sFiltro,
+        }
     end
 
 
     do
         local pg = refs.paginas.VISUAL
-        criar_titulo(pg, 1, "ESP")
-        criar_toggle(pg, 2, "ESP enabled", "ESPEnabled", nil,
+
+        local sEsp = criar_secao(pg, 1, "ESP")
+        sEsp:AddToggle("ESP enabled", "ESPEnabled", nil,
             "shows enemies through walls")
-        criar_toggle(pg, 3, "Box", "ESPBox", nil,
+
+        local sCaixa = criar_secao(pg, 2, "Box")
+        sCaixa:AddToggle("Box", "ESPBox", nil,
             "box around the body")
-        criar_toggle(pg, 5, "Name", "ESPShowName", nil)
-        criar_toggle(pg, 6, "Health and distance", "ESPShowHealth", nil,
+
+        local sInfo = criar_secao(pg, 3, "Info")
+        sInfo:AddToggle("Name", "ESPShowName", nil)
+        sInfo:AddToggle("Health and distance", "ESPShowHealth", nil,
             "bar and number, scaled to the 150 this game uses")
-        criar_toggle(pg, 7, "Show distance", "ESPShowDist", nil)
-        criar_slider(pg, 8, "Range", "ESPMaxDistance", 50, 2000, 50,
+        sInfo:AddToggle("Show distance", "ESPShowDist", nil)
+
+        --[[
+            O Range ficou sozinho numa secao porque e' o ajuste
+            que mais mexe no que voce ve na tela - e foi o que
+            estava sem funcionar (o ESP ignorava ele).
+        --]]
+        local sAlcance = criar_secao(pg, 4, "Range")
+        sAlcance:AddSlider("Range", "ESPMaxDistance", 50, 2000, 50,
             function(v) return tostring(math.floor(v)) .. "m" end)
     end
 
 
     do
         local pg = refs.paginas.MOVEMENT
-        criar_titulo(pg, 1, "Flight")
-        criar_toggle(pg, 2, "Fly", "FlyEnabled",
+
+        local sVoo = criar_secao(pg, 1, "Flight")
+        sVoo:AddToggle("Fly", "FlyEnabled",
             function(on) if on then start_fly() else stop_fly() end end,
-            "WASD voa, Space sobe, Ctrl desce")
-        criar_slider(pg, 3, "Fly speed", "FlySpeed", 10, 200, 5,
+            "WASD to move, Space up, Ctrl down")
+        sVoo:AddSlider("Fly speed", "FlySpeed", 10, 200, 5,
             function(v) return tostring(math.floor(v)) end)
 
-        criar_titulo(pg, 4, "Speed")
-        criar_toggle(pg, 5, "Increase speed", "SpeedEnabled", nil,
-            "acima do normal chama atencao")
-        criar_slider(pg, 6, "Speed", "SpeedValue", 16, 60, 1,
+        local sVel = criar_secao(pg, 2, "Speed")
+        sVel:AddToggle("Increase speed", "SpeedEnabled", nil,
+            "above normal draws attention")
+        sVel:AddSlider("Speed", "SpeedValue", 16, 60, 1,
             function(v) return tostring(math.floor(v)) end)
     end
 
 
     do
         local pg = refs.paginas.FPS
-        criar_titulo(pg, 1, "Performance")
 
-        local cartao = novo("Frame", {
-            Size = UDim2.new(1, 0, 0, 92),
-            BackgroundColor3 = UI.cor.cartao,
-            BorderSizePixel = 0,
-            LayoutOrder = 2,
-        })
-        cartao.Parent = pg
-        canto(cartao, 10)
+        --[[
+            O FPS tinha um cartao feito a mao com titulo, subtitulo
+            e botao. Agora que existe criar_secao, virou abinha
+            igual as outras - menos codigo e a mesma cara.
+        --]]
+        local sFps = criar_secao(pg, 1, "FPS Mode")
 
-        local t = novo("TextLabel", {
-            Size = UDim2.new(1, -24, 0, 20),
-            Position = UDim2.new(0, 14, 0, 12),
+        local linha = novo("Frame", {
+            Size = UDim2.new(1, 0, 0, 52),
             BackgroundTransparency = 1,
-            Text = "FPS Mode",
-            TextColor3 = UI.cor.texto,
-            Font = UI.fonteB,
-            TextSize = 15,
-            TextXAlignment = Enum.TextXAlignment.Left,
+            LayoutOrder = sFps:prox(),
         })
-        t.Parent = cartao
+        linha.Parent = sFps.inner
 
         local d = novo("TextLabel", {
-            Size = UDim2.new(1, -24, 0, 16),
-            Position = UDim2.new(0, 14, 0, 32),
+            Size = UDim2.new(1, -118, 0, 16),
+            Position = UDim2.new(0, 14, 0, 6),
             BackgroundTransparency = 1,
             Text = "turns off shadows, effects and fog",
             TextColor3 = UI.cor.fraco,
@@ -2901,11 +3156,11 @@ local function build()
             TextSize = 11,
             TextXAlignment = Enum.TextXAlignment.Left,
         })
-        d.Parent = cartao
+        d.Parent = linha
 
         local botao = novo("TextButton", {
             Size = UDim2.new(1, -28, 0, 30),
-            Position = UDim2.new(0, 14, 0, 52),
+            Position = UDim2.new(0, 14, 0, 24),
             BackgroundColor3 = UI.cor.cartao2,
             BorderSizePixel = 0,
             Text = "ON",
@@ -2914,7 +3169,7 @@ local function build()
             TextSize = 12,
             AutoButtonColor = false,
         })
-        botao.Parent = cartao
+        botao.Parent = linha
         canto(botao, 8)
         hover(botao, 0.10)
 
@@ -2936,16 +3191,18 @@ local function build()
 
     do
         local pg = refs.paginas.CONFIG
-        criar_titulo(pg, 1, "Presets")
+
+        -- os presets prontos vao numa abinha
+        local sPre = criar_secao(pg, 1, "Presets")
 
         for i, p in ipairs(PRESETS) do
             local c = novo("Frame", {
                 Size = UDim2.new(1, 0, 0, 50),
                 BackgroundColor3 = UI.cor.cartao,
                 BorderSizePixel = 0,
-                LayoutOrder = 1 + i,
+                LayoutOrder = i + 1,
             })
-            c.Parent = pg
+            c.Parent = sPre.inner
             canto(c, 9)
 
             local faixa = novo("Frame", {
@@ -3000,16 +3257,16 @@ local function build()
             end)
         end
 
-        criar_titulo(pg, 20, "My preset")
-        criar_toggle(pg, 21, "Save on exit", "AutoSave", nil,
-            "grava as configuracoes quando o hub fecha")
+        local sMeu = criar_secao(pg, 2, "My preset")
+        sMeu:AddToggle("Save on exit", "AutoSave", nil,
+            "writes your settings when the hub closes")
 
         local linha = novo("Frame", {
             Size = UDim2.new(1, 0, 0, 40),
             BackgroundTransparency = 1,
-            LayoutOrder = 22,
+            LayoutOrder = sMeu:prox(),
         })
-        linha.Parent = pg
+        linha.Parent = sMeu.inner
 
         local salvar = novo("TextButton", {
             Size = UDim2.new(0.5, -4, 1, 0),
@@ -3075,12 +3332,13 @@ local function build()
     task.spawn(function()
         while painel.Parent do
             local m = attack_mode
-            if m == "engine" then m = "nativo"
-            elseif m == "none" then m = "SEM METODO" end
+            if m == "engine" then m = "native"
+            elseif m == "none" then m = "NO METHOD" end
             pcall(function()
                 estado.Text = fire_state
                 local mira = (MIRA_MODO == "camera") and "cam" or "mouse"
-                metodo.Text = m .. " / " .. mira .. "  ·  " .. tostring(shots) .. " tiros"
+                metodo.Text = m .. " / " .. mira .. "  ·  "
+                              .. tostring(shots) .. " shots"
             end)
             task.wait(0.25)
         end
