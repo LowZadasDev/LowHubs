@@ -17,26 +17,7 @@ local CATALOGO = {
         nome   = "Rivals",
         desc   = "Aimlock, triggerbot, box ESP",
         arquivo = "lowhub_rivals.lua",
-        --[[
-            OS IDs DO RIVALS ESTAVAM ERRADOS (corrigido 22/10)
-
-            Antes:  place  = 117398147513099
-                    criador = 6035872082
-
-            6035872082 NAO e' CreatorId - e' o UNIVERSE ID. Como
-            game.CreatorId nunca devolve isso, a deteccao falhava
-            sempre e o auto-carregamento nunca achava o Rivals.
-
-            Conferido na API da Roblox:
-              UniverseId 6035872082
-                rootPlaceId = 17625359962    <- mapa principal
-                creator     = 3461453        <- grupo Nosniy Games
-
-            O Rivals tem mais de um lugar no mesmo universo, entao
-            eu aceito os dois PlaceIds conhecidos:
-              17625359962     (root)
-              117398147513099 (secundario - era o que a gente tinha)
-        --]]
+    
         places  = { 17625359962, 117398147513099 },
         criador = 3461453,
         cor    = Color3.fromRGB(255, 90, 110),
@@ -135,18 +116,7 @@ local estado = {
     baixando = false,
 }
 
---[[
-    DECLARACAO ANTECIPADA
 
-    `rodar` (definida mais abaixo) precisa desligar o atalho do
-    RightShift DEPOIS que o hub sobe - pra nao ficarem dois
-    paineis na tela.
-
-    Em Lua, `local function` so cria o nome na linha em que
-    aparece. Como `desativar_tecla` e' definida bem depois, o
-    `rodar` enxergaria nil. Entao eu declaro os nomes AQUI e
-    preencho la embaixo.
---]]
 local ativar_tecla
 local desativar_tecla
 
@@ -205,26 +175,7 @@ local function baixar(url)
     return corpo
 end
 
---[[
-    LIMPEZA TOTAL DO CARREGADOR
 
-    Pedido do dono: "nao tem como depois que validar q executor
-    fechar o hub?"
-
-    Tem. Mas so destruir `estado.gui` nao bastava, porque:
-
-      1. se a referencia se perdesse (o hub mexe no PlayerGui),
-         sobraria um painel fantasma na tela
-      2. o `abrir()` podia reconstruir o menu DEPOIS da limpeza
-      3. o overlay e' um Frame separado - se o ScreenGui morresse
-         sem ele, ficaria um retangulo preto preso na tela
-
-    Entao aqui eu caco por NOME, no PlayerGui E no CoreGui, em vez
-    de confiar numa referencia so. E' a diferenca entre "acho que
-    apaguei" e "nao sobrou nada".
-
-    Uso pcall em tudo: CoreGui costuma ser protegido e da erro.
---]]
 local function varrer_chao()
     -- desliga o atalho primeiro: sem isso, um RightShift depois
     -- da limpeza recriaria o menu do nada
@@ -322,37 +273,7 @@ local function rodar(item)
             ativar_tecla()
             if estado.abrir then estado.abrir() end
         else
-            --[[
-                DEU CERTO: O CARREGADOR MORRE AQUI.
 
-                Era o pedido: "depois que validar q executor
-                fechar o hub". Agora, quando o hub sobe, nao
-                sobra nada do carregador - nem painel, nem
-                atalho, nem registro global.
-
-                Se voce quiser o menu de volta, e' so rodar o
-                lowhubs de novo.
-            --]]
-            varrer_chao()
-        end
-        estado.baixando = false
-    end)
-end
-
---[[
-    QUAL JOGO E' ESTE?
-
-    Cada entrada do catalogo pode declarar o jogo de duas formas:
-
-        place  = 123          (um PlaceId so)
-        places = { 123, 456 } (varios - jogo com mais de um lugar)
-
-    A segunda existe por causa do Rivals, que tem o mapa principal
-    e um secundario, ambos do mesmo universo.
-
-    Alem do PlaceId, aceito o CreatorId. Isso cobre mapa novo que
-    eu ainda nao conheco: se for do mesmo dono, e' o mesmo jogo.
---]]
 local function bate_place(item)
     if item.place and game.PlaceId == item.place then return true end
     if item.places then
@@ -592,30 +513,7 @@ end
 
 estado.abrir = abrir
 
---[[
-    TECLA DO MENU  (o bug dos DOIS paineis)
 
-    O que estava acontecendo:
-
-        executa lowhubs
-          -> detecta o Rivals
-          -> baixa e roda o hub          (o hub abre)
-          -> MAS este InputBegan continua ligado
-
-        aperta RightShift
-          -> o hub abre/fecha o painel dele     (certo)
-          -> E este handler abre o menu do carregador  (errado)
-
-    Resultado: dois paineis empilhados na tela.
-
-    Correcao: depois que o hub carrega com sucesso, este menu
-    nao tem mais razao de existir. Eu DESLIGO o atalho - o
-    RightShift passa a ser so do hub.
-
-    Se o hub falhar, o atalho volta a valer (pra voce escolher
-    na mao). Por isso guardo a conexao numa variavel e ligo/
-    desligo conforme o caso.
---]]
 local TECLA = Enum.KeyCode.RightShift
 local conn_tecla = nil
 
@@ -666,25 +564,7 @@ G.__LOWHUB_CARREGADOR = {
 
 task.wait(math.random() * 0.5)
 
---[[
-    AUTO-CARREGAMENTO
 
-    Antes isto abria o menu e esperava o usuario clicar. Agora
-    ele detecta o jogo e carrega o hub sozinho - sem clique.
-
-    Regras:
-
-      - Achou o jogo  -> baixa, roda o hub e ENTREGA a tela.
-                         O carregador se apaga por inteiro: nao
-                         sobra painel nem atalho.
-      - Nao achou     -> abre o menu (pra escolher na mao ou so
-                         ver que o jogo nao e' suportado).
-      - AJUSTE_MANUAL -> liga o menu de volta, se voce preferir
-                         escolher sempre na mao.
-
-    Quer o menu de volta depois que o hub subiu? Roda o lowhubs
-    de novo - ele e' re-executavel quantas vezes quiser.
---]]
 local AJUSTE_MANUAL = false
 
 local atual = detectar_atual()
