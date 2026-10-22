@@ -17,26 +17,7 @@ local CATALOGO = {
         nome   = "Rivals",
         desc   = "Aimlock, triggerbot, box ESP",
         arquivo = "lowhub_rivals.lua",
-        --[[
-            OS IDs DO RIVALS ESTAVAM ERRADOS (corrigido 22/10)
-
-            Antes:  place  = 117398147513099
-                    criador = 6035872082
-
-            6035872082 NAO e' CreatorId - e' o UNIVERSE ID. Como
-            game.CreatorId nunca devolve isso, a deteccao falhava
-            sempre e o auto-carregamento nunca achava o Rivals.
-
-            Conferido na API da Roblox:
-              UniverseId 6035872082
-                rootPlaceId = 17625359962    <- mapa principal
-                creator     = 3461453        <- grupo Nosniy Games
-
-            O Rivals tem mais de um lugar no mesmo universo, entao
-            eu aceito os dois PlaceIds conhecidos:
-              17625359962     (root)
-              117398147513099 (secundario - era o que a gente tinha)
-        --]]
+        
         places  = { 17625359962, 117398147513099 },
         criador = 3461453,
         cor    = Color3.fromRGB(255, 90, 110),
@@ -527,23 +508,7 @@ G.__LOWHUB_CARREGADOR = {
 
 task.wait(math.random() * 0.5)
 
---[[
-    AUTO-CARREGAMENTO
 
-    Antes isto abria o menu e esperava o usuario clicar. Agora
-    ele detecta o jogo e carrega o hub sozinho - sem clique.
-
-    Regras:
-
-      - Achou o jogo  -> baixa e roda o hub certo na hora.
-      - Nao achou     -> abre o menu (pra escolher na mao ou so
-                         ver que o jogo nao e' suportado).
-      - AJUSTE_MANUAL -> liga o menu de volta, se voce preferir
-                         escolher sempre na mao.
-
-    O menu continua acessivel pelo RightShift de qualquer jeito,
-    entao o auto nao tira o controle de ninguem.
---]]
 local AJUSTE_MANUAL = false
 
 local atual = detectar_atual()
