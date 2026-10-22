@@ -331,7 +331,7 @@ end
 
 local f_queue = envfn("queue_on_teleport") or envfn("queueonteleport")
 
-local HUB_URL = "https://raw.githubusercontent.com/pedrodsodres-alt/LowHubs/refs/heads/main/lowhub_tribes.lua"
+local HUB_URL = "https://raw.githubusercontent.com/LowZadasDev/LowHubs/refs/heads/main/lowhub_tribes.lua"
 
 local hub_url = nil
 
