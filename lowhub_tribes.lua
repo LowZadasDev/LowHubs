@@ -1,4 +1,4 @@
-local VERSION = "LowHub"
+local VERSION = "LowHub Tribes"
 local limpar_tudo = nil
 
 local JOGO_ESPERADO = {
