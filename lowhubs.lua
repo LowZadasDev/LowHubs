@@ -481,23 +481,6 @@ G.__LOWHUB_CARREGADOR = {
 
 task.wait(math.random() * 0.5)
 
---[[
-    AUTO-CARREGAMENTO
-
-    Antes isto abria o menu e esperava o usuario clicar. Agora
-    ele detecta o jogo e carrega o hub sozinho - sem clique.
-
-    Regras:
-
-      - Achou o jogo  -> baixa e roda o hub certo na hora.
-      - Nao achou     -> abre o menu (pra escolher na mao ou so
-                         ver que o jogo nao e' suportado).
-      - AJUSTE_MANUAL -> liga o menu de volta, se voce preferir
-                         escolher sempre na mao.
-
-    O menu continua acessivel pelo RightShift de qualquer jeito,
-    entao o auto nao tira o controle de ninguem.
---]]
 local AJUSTE_MANUAL = false
 
 local atual = detectar_atual()
